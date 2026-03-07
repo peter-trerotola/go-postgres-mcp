@@ -1,4 +1,4 @@
-module github.com/petros/go-postgres-mcp
+module github.com/peter-trerotola/go-postgres-mcp
 
 go 1.23.0
 

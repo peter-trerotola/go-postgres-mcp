@@ -1,5 +1,11 @@
 # go-postgres-mcp
 
+[![CI](https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/ci.yml)
+[![Release](https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/release.yml/badge.svg)](https://github.com/peter-trerotola/go-postgres-mcp/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/peter-trerotola/go-postgres-mcp)](https://goreportcard.com/report/github.com/peter-trerotola/go-postgres-mcp)
+[![Go Reference](https://pkg.go.dev/badge/github.com/peter-trerotola/go-postgres-mcp.svg)](https://pkg.go.dev/github.com/peter-trerotola/go-postgres-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A Go-based [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that provides **read-only** access to PostgreSQL databases. Designed for use with Claude Desktop, Claude Code, and other MCP-compatible clients.
 
 ## Features
@@ -181,6 +187,15 @@ Download from [GitHub Releases](https://github.com/peter-trerotola/go-postgres-m
 ```bash
 # Linux amd64
 curl -L https://github.com/peter-trerotola/go-postgres-mcp/releases/latest/download/go-postgres-mcp_linux_amd64.tar.gz | tar xz
+
+# Linux arm64
+curl -L https://github.com/peter-trerotola/go-postgres-mcp/releases/latest/download/go-postgres-mcp_linux_arm64.tar.gz | tar xz
+
+# macOS Apple Silicon
+curl -L https://github.com/peter-trerotola/go-postgres-mcp/releases/latest/download/go-postgres-mcp_darwin_arm64.tar.gz | tar xz
+
+# macOS Intel
+curl -L https://github.com/peter-trerotola/go-postgres-mcp/releases/latest/download/go-postgres-mcp_darwin_amd64.tar.gz | tar xz
 ```
 
 ### Docker

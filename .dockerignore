@@ -1,0 +1,17 @@
+.git
+.github
+*.md
+*.db
+*.sqlite
+*.db-shm
+*.db-wal
+.gitignore
+.mcp.json
+.claude/
+config.yaml
+.env
+LICENSE
+docker-compose.yaml
+.goreleaser.yml
+release-please-config.json
+.release-please-manifest.json

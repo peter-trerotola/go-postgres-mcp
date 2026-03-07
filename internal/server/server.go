@@ -8,9 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/petros/go-postgres-mcp/internal/config"
-	"github.com/petros/go-postgres-mcp/internal/knowledgemap"
-	"github.com/petros/go-postgres-mcp/internal/postgres"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/postgres"
 )
 
 type App struct {

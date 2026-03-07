@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/petros/go-postgres-mcp/internal/config"
-	"github.com/petros/go-postgres-mcp/internal/server"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/server"
 )
 
 func main() {

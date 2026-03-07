@@ -33,6 +33,36 @@ builds:
     ldflags:
       - -s -w
 
+  - id: darwin-amd64
+    main: ./cmd/main.go
+    binary: go-postgres-mcp
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target x86_64-macos
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  - id: darwin-arm64
+    main: ./cmd/main.go
+    binary: go-postgres-mcp
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target aarch64-macos
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
 archives:
   - format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
