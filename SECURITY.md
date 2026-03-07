@@ -4,8 +4,7 @@
 
 If you discover a security vulnerability in go-postgres-mcp, please report it responsibly:
 
-1. **GitHub Security Advisory** (preferred): [Create a private security advisory](https://github.com/peter-trerotola/go-postgres-mcp/security/advisories/new)
-2. **Email:** Open a private advisory if email is not available
+**GitHub Security Advisory** (preferred): [Create a private security advisory](https://github.com/peter-trerotola/go-postgres-mcp/security/advisories/new)
 
 **Do not open a public issue for security vulnerabilities.**
 
