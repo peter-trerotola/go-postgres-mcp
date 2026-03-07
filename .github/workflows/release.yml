@@ -126,6 +126,8 @@ jobs:
     needs: [release-please, build-linux, build-darwin]
     if: ${{ needs.release-please.outputs.release_created }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download Linux archives
         uses: actions/download-artifact@v4
         with:
@@ -142,11 +144,17 @@ jobs:
         working-directory: archives
         run: sha256sum *.tar.gz > checksums.txt
 
-      - name: Upload release assets
+      - name: Upload assets to draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "$TAG" --clobber archives/* --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$TAG" archives/* --repo "$GITHUB_REPOSITORY"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
 
   docker:
     runs-on: ubuntu-latest
