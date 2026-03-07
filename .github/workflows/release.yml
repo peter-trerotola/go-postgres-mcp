@@ -80,7 +80,7 @@ jobs:
           tar czf "../../archives/go-postgres-mcp_${VERSION}_linux_arm64.tar.gz" go-postgres-mcp
 
       - name: Upload Linux archives
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: archives-linux
           path: archives/
@@ -117,7 +117,7 @@ jobs:
           tar czf "../../archives/go-postgres-mcp_${VERSION}_darwin_arm64.tar.gz" go-postgres-mcp
 
       - name: Upload macOS archives
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: archives-darwin
           path: archives/
