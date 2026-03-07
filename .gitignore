@@ -16,10 +16,21 @@ go.work.sum
 *.db
 *.sqlite
 
+# SQLite WAL/SHM
+*.db-shm
+*.db-wal
+
 # Config with secrets (use config.example.yaml as template)
 config.yaml
 .env
 
+# MCP client config (may contain passwords)
+.mcp.json
+
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

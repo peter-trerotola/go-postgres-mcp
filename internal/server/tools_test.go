@@ -9,8 +9,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/petros/go-postgres-mcp/internal/knowledgemap"
-	"github.com/petros/go-postgres-mcp/internal/postgres"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/postgres"
 )
 
 func TestRequireStringArg_Present(t *testing.T) {

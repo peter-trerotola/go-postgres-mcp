@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/petros/go-postgres-mcp/internal/config"
-	"github.com/petros/go-postgres-mcp/internal/guard"
-	"github.com/petros/go-postgres-mcp/internal/knowledgemap"
-	"github.com/petros/go-postgres-mcp/internal/postgres"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/guard"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/postgres"
 )
 
 func (a *App) registerTools() {
