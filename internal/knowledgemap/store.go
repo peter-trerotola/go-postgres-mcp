@@ -16,10 +16,14 @@ type Store struct {
 // Open creates or opens a SQLite database at the given path and initializes
 // the schema. WAL mode and foreign keys are enabled.
 func Open(path string) (*Store, error) {
-	db, err := sqlx.Open("sqlite", path+"?_pragma=journal_mode(wal)&_pragma=foreign_keys(on)")
+	db, err := sqlx.Open("sqlite", path+"?_pragma=journal_mode(wal)&_pragma=foreign_keys(on)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite: %w", err)
 	}
+	// Allow concurrent readers under WAL mode while keeping the pool small.
+	// WAL mode handles reader/writer concurrency; busy_timeout handles
+	// write contention from concurrent discovery goroutines.
+	db.SetMaxOpenConns(4)
 	if _, err := db.Exec(ddl); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("initializing schema: %w", err)

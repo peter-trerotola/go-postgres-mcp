@@ -34,7 +34,7 @@ func (pm *PoolManager) Connect(ctx context.Context, dbCfg config.DatabaseConfig)
 		return fmt.Errorf("parsing pool config for %q: %w", dbCfg.Name, err)
 	}
 
-	poolCfg.MaxConns = 5
+	poolCfg.MaxConns = dbCfg.MaxPoolConns()
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {

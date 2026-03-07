@@ -13,6 +13,11 @@ import (
 // Discover crawls a PostgreSQL database schema and populates the knowledge map.
 // All existing knowledge map data for the database is cleared and then re-inserted.
 // Schema and table filters from the config are applied during discovery.
+//
+// Queries run sequentially within a single read-only transaction, with SQLite
+// writes interleaved after each query (pipeline pattern). This is faster than
+// fetching everything first because PG I/O and SQLite writes overlap.
+// Cross-database parallelism is handled by the caller (server.Start).
 func Discover(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	if err := store.ClearDatabase(dbCfg.Name); err != nil {
 		return fmt.Errorf("clearing database %q: %w", dbCfg.Name, err)
@@ -24,48 +29,52 @@ func Discover(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConf
 
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
-		return fmt.Errorf("beginning discovery transaction: %w", err)
+		return fmt.Errorf("beginning read-only transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	schemas, err := discoverSchemas(ctx, tx)
-	if err != nil {
+	// Schemas
+	if err := discoverSchemas(ctx, tx, dbCfg, store); err != nil {
 		return err
 	}
-	for _, s := range schemas {
-		if !dbCfg.ShouldIncludeSchema(s) {
-			continue
-		}
-		if err := store.InsertSchema(dbCfg.Name, s); err != nil {
-			return fmt.Errorf("inserting schema %q: %w", s, err)
-		}
-	}
 
+	// Tables
 	if err := discoverTables(ctx, tx, dbCfg, store); err != nil {
 		return err
 	}
+
+	// Columns
 	if err := discoverColumns(ctx, tx, dbCfg, store); err != nil {
 		return err
 	}
+
+	// Constraints
 	if err := discoverConstraints(ctx, tx, dbCfg, store); err != nil {
 		return err
 	}
+
+	// Indexes
 	if err := discoverIndexes(ctx, tx, dbCfg, store); err != nil {
 		return err
 	}
+
+	// Foreign keys
 	if err := discoverForeignKeys(ctx, tx, dbCfg, store); err != nil {
 		return err
 	}
+
+	// Views
 	if err := discoverViews(ctx, tx, dbCfg, store); err != nil {
 		return err
 	}
+
+	// Functions
 	if err := discoverFunctions(ctx, tx, dbCfg, store); err != nil {
 		return err
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("committing discovery transaction: %w", err)
-	}
+	// Release the PG connection before building the SQLite search index.
+	tx.Rollback(ctx)
 
 	if err := store.IndexForSearch(dbCfg.Name); err != nil {
 		return fmt.Errorf("building search index: %w", err)
@@ -74,25 +83,29 @@ func Discover(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConf
 	return nil
 }
 
-func discoverSchemas(ctx context.Context, tx pgx.Tx) ([]string, error) {
+func discoverSchemas(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT schema_name FROM information_schema.schemata
 		WHERE schema_name NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		ORDER BY schema_name`)
 	if err != nil {
-		return nil, fmt.Errorf("querying schemas: %w", err)
+		return fmt.Errorf("querying schemas: %w", err)
 	}
 	defer rows.Close()
 
-	var schemas []string
 	for rows.Next() {
 		var s string
 		if err := rows.Scan(&s); err != nil {
-			return nil, err
+			return err
 		}
-		schemas = append(schemas, s)
+		if !dbCfg.ShouldIncludeSchema(s) {
+			continue
+		}
+		if err := store.InsertSchema(dbCfg.Name, s); err != nil {
+			return fmt.Errorf("inserting schema %q: %w", s, err)
+		}
 	}
-	return schemas, rows.Err()
+	return rows.Err()
 }
 
 func discoverTables(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
@@ -120,10 +133,7 @@ func discoverTables(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig,
 		if err := rows.Scan(&t.SchemaName, &t.TableName, &t.TableType, &t.RowEstimate, &t.SizeBytes, &t.Description); err != nil {
 			return err
 		}
-		if !dbCfg.ShouldIncludeSchema(t.SchemaName) {
-			continue
-		}
-		if !dbCfg.ShouldIncludeTable(t.SchemaName, t.TableName) {
+		if !dbCfg.ShouldIncludeSchema(t.SchemaName) || !dbCfg.ShouldIncludeTable(t.SchemaName, t.TableName) {
 			continue
 		}
 		if err := store.InsertTable(dbCfg.Name, t); err != nil {
@@ -148,6 +158,8 @@ func discoverColumns(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig
 				c.ordinal_position
 			), '') AS description
 		FROM information_schema.columns c
+		JOIN information_schema.tables t
+			ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
 		WHERE c.table_schema NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		ORDER BY c.table_schema, c.table_name, c.ordinal_position`)
 	if err != nil {
@@ -161,10 +173,7 @@ func discoverColumns(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig
 			&col.Ordinal, &col.DataType, &col.IsNullable, &col.ColumnDefault, &col.Description); err != nil {
 			return err
 		}
-		if !dbCfg.ShouldIncludeSchema(col.SchemaName) {
-			continue
-		}
-		if !dbCfg.ShouldIncludeTable(col.SchemaName, col.TableName) {
+		if !dbCfg.ShouldIncludeSchema(col.SchemaName) || !dbCfg.ShouldIncludeTable(col.SchemaName, col.TableName) {
 			continue
 		}
 		if err := store.InsertColumn(dbCfg.Name, col); err != nil {
@@ -192,6 +201,7 @@ func discoverConstraints(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseCo
 		JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 		WHERE n.nspname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
+		  AND c.relkind <> 'm'
 		ORDER BY n.nspname, c.relname, con.conname`)
 	if err != nil {
 		return fmt.Errorf("querying constraints: %w", err)
@@ -203,10 +213,7 @@ func discoverConstraints(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseCo
 		if err := rows.Scan(&con.SchemaName, &con.TableName, &con.ConstraintName, &con.ConstraintType, &con.Definition); err != nil {
 			return err
 		}
-		if !dbCfg.ShouldIncludeSchema(con.SchemaName) {
-			continue
-		}
-		if !dbCfg.ShouldIncludeTable(con.SchemaName, con.TableName) {
+		if !dbCfg.ShouldIncludeSchema(con.SchemaName) || !dbCfg.ShouldIncludeTable(con.SchemaName, con.TableName) {
 			continue
 		}
 		if err := store.InsertConstraint(dbCfg.Name, con); err != nil {
@@ -230,6 +237,7 @@ func discoverIndexes(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig
 		JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid
 		JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
 		WHERE n.nspname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
+		  AND t.relkind <> 'm'
 		ORDER BY n.nspname, t.relname, i.relname`)
 	if err != nil {
 		return fmt.Errorf("querying indexes: %w", err)
@@ -241,10 +249,7 @@ func discoverIndexes(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig
 		if err := rows.Scan(&idx.SchemaName, &idx.TableName, &idx.IndexName, &idx.IsUnique, &idx.IsPrimary, &idx.Definition); err != nil {
 			return err
 		}
-		if !dbCfg.ShouldIncludeSchema(idx.SchemaName) {
-			continue
-		}
-		if !dbCfg.ShouldIncludeTable(idx.SchemaName, idx.TableName) {
+		if !dbCfg.ShouldIncludeSchema(idx.SchemaName) || !dbCfg.ShouldIncludeTable(idx.SchemaName, idx.TableName) {
 			continue
 		}
 		if err := store.InsertIndex(dbCfg.Name, idx); err != nil {
@@ -286,10 +291,7 @@ func discoverForeignKeys(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseCo
 			&fk.RefSchema, &fk.RefTable, &fk.RefColumn); err != nil {
 			return err
 		}
-		if !dbCfg.ShouldIncludeSchema(fk.SchemaName) {
-			continue
-		}
-		if !dbCfg.ShouldIncludeTable(fk.SchemaName, fk.TableName) {
+		if !dbCfg.ShouldIncludeSchema(fk.SchemaName) || !dbCfg.ShouldIncludeTable(fk.SchemaName, fk.TableName) {
 			continue
 		}
 		if err := store.InsertForeignKey(dbCfg.Name, fk); err != nil {

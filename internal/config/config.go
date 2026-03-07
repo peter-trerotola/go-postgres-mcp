@@ -22,8 +22,17 @@ type DatabaseConfig struct {
 	User        string      `yaml:"user"`
 	PasswordEnv string      `yaml:"password_env"`
 	SSLMode     string      `yaml:"sslmode"`
+	MaxConns    int32       `yaml:"max_conns"`
 	Schemas     []string    `yaml:"schemas"`
 	Tables      TableFilter `yaml:"tables"`
+}
+
+// MaxPoolConns returns the configured max pool connections, defaulting to 5.
+func (d *DatabaseConfig) MaxPoolConns() int32 {
+	if d.MaxConns <= 0 {
+		return 5
+	}
+	return d.MaxConns
 }
 
 type KnowledgeMapConfig struct {

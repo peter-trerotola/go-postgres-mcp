@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/petros/go-postgres-mcp/internal/config"
 	"github.com/petros/go-postgres-mcp/internal/knowledgemap"
@@ -41,6 +43,8 @@ func New(cfg *config.Config) (*App, error) {
 }
 
 // Start connects to all databases and optionally runs auto-discovery.
+// Connections are established sequentially (required before discovery),
+// then discovery runs concurrently across all databases.
 func (a *App) Start(ctx context.Context) error {
 	for _, dbCfg := range a.cfg.Databases {
 		log.Printf("connecting to database %q at %s:%d/%s", dbCfg.Name, dbCfg.Host, dbCfg.Port, dbCfg.Database)
@@ -48,20 +52,28 @@ func (a *App) Start(ctx context.Context) error {
 			return fmt.Errorf("connecting to %q: %w", dbCfg.Name, err)
 		}
 		log.Printf("connected to database %q", dbCfg.Name)
+	}
 
-		if a.cfg.KnowledgeMap.AutoDiscoverOnStartup {
-			log.Printf("auto-discovering schema for %q", dbCfg.Name)
+	if a.cfg.KnowledgeMap.AutoDiscoverOnStartup {
+		var wg sync.WaitGroup
+		for _, dbCfg := range a.cfg.Databases {
 			pool, err := a.pools.Get(dbCfg.Name)
 			if err != nil {
 				log.Printf("warning: auto-discovery skipped for %q: failed to get pool: %v", dbCfg.Name, err)
 				continue
 			}
-			if err := postgres.Discover(ctx, pool, dbCfg, a.store); err != nil {
-				log.Printf("warning: auto-discovery failed for %q: %v", dbCfg.Name, err)
-			} else {
-				log.Printf("auto-discovery complete for %q", dbCfg.Name)
-			}
+			wg.Add(1)
+			go func(pool *pgxpool.Pool, dbCfg config.DatabaseConfig) {
+				defer wg.Done()
+				log.Printf("auto-discovering schema for %q", dbCfg.Name)
+				if err := postgres.Discover(ctx, pool, dbCfg, a.store); err != nil {
+					log.Printf("warning: auto-discovery failed for %q: %v", dbCfg.Name, err)
+				} else {
+					log.Printf("auto-discovery complete for %q", dbCfg.Name)
+				}
+			}(pool, dbCfg)
 		}
+		wg.Wait()
 	}
 	return nil
 }
