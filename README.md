@@ -7,6 +7,9 @@ A Go-based [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) serv
 - **9 MCP tools** for querying and exploring PostgreSQL schemas
 - **4 layers of read-only protection** to prevent any data mutation
 - **Schema knowledge map** stored in SQLite with full-text search (FTS5)
+- **Automatic schema context** injected into query responses so LLMs always see correct column names
+- **Enriched error messages** that include actual schema when queries fail with wrong column/table names
+- **MCP resource templates** for browsable schema access
 - **Multi-database support** from a single server instance
 - **Auto-discovery** of schemas, tables, columns, constraints, indexes, views, and functions
 - **Schema and table filtering** — whitelist or blacklist what gets discovered
@@ -23,6 +26,53 @@ Every query passes through four defensive layers before execution:
 | **Tier 3** | Transaction-level | Every query runs inside `BEGIN READ ONLY` via `pgx.TxOptions{AccessMode: pgx.ReadOnly}` |
 | **Tier 4** | PostgreSQL user | Configure with a database user that has only SELECT grants (see configuration below) |
 
+## Schema Context Injection
+
+LLMs often write queries with wrong column names — either because they skip `describe_table` or lose schema details across conversation turns. This server addresses that with automatic schema context at multiple layers:
+
+### 1. Server Instructions
+
+The server sends workflow guidance to the LLM during initialization, directing it to use `describe_table` before writing queries and to check `schema_context` in responses.
+
+### 2. Schema Context in Query Responses
+
+Every successful `query` response includes a `schema_context` field with column names and types for all tables referenced in the SQL:
+
+```json
+{
+  "columns": ["id", "name", "email"],
+  "rows": [...],
+  "count": 10,
+  "truncated": false,
+  "schema_context": {
+    "public.users": [
+      {"column": "id", "type": "integer"},
+      {"column": "name", "type": "text"},
+      {"column": "email", "type": "text"}
+    ]
+  }
+}
+```
+
+Table references are extracted from the SQL via AST parsing (the same `pg_query_go` parser used for read-only enforcement) and looked up from the in-process SQLite knowledge map — no additional database round-trips.
+
+### 3. Enriched Error Messages
+
+When a query fails with a column or table "does not exist" error, the error message is enriched with the actual schema from the knowledge map:
+
+```
+executing query: ERROR: column "source_page_id" does not exist (SQLSTATE 42703)
+
+Schema for referenced tables:
+  public.spider_links: id (bigint), job_id (uuid), from_page_id (bigint), to_url (text)
+```
+
+This gives the LLM immediate feedback to self-correct without needing a separate `describe_table` call.
+
+### 4. Tool Annotations
+
+All tools are annotated with MCP tool hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`) so clients can make informed decisions about tool usage. All tools except `discover` are marked read-only.
+
 ## MCP Tools
 
 | Tool | Description | Data Source |
@@ -36,6 +86,17 @@ Every query passes through four defensive layers before execution:
 | `list_views` | List views in a schema | SQLite knowledge map |
 | `list_functions` | List functions in a schema | SQLite knowledge map |
 | `search_schema` | Full-text search across all metadata | SQLite FTS5 |
+
+## MCP Resources
+
+The server exposes schema as browsable [MCP resources](https://modelcontextprotocol.io/docs/concepts/resources) via URI templates:
+
+| Template | Description |
+|----------|-------------|
+| `schema:///{database}/tables` | List all tables with column counts |
+| `schema:///{database}/{schema}/{table}` | Full table detail (columns, constraints, indexes, FKs) |
+
+These are available to MCP clients that support resource browsing.
 
 ## Configuration
 
@@ -216,7 +277,8 @@ go-postgres-mcp/
 │   │   ├── config.go                # YAML config types + loading + validation
 │   │   └── config_test.go           # Config loading/validation tests
 │   ├── guard/
-│   │   ├── parser.go                # Tier 1: AST-based validation (pg_query_go)
+│   │   ├── parser.go                # Tier 1: AST validation + table ref extraction
+│   │   ├── parser_test.go           # ExtractTableRefs tests (JOINs, CTEs, etc.)
 │   │   ├── guard.go                 # Guard entry point + ForbiddenError type
 │   │   └── guard_test.go            # Comprehensive read-only enforcement tests
 │   ├── postgres/
@@ -233,7 +295,9 @@ go-postgres-mcp/
 │   └── server/
 │       ├── server.go                # MCP server wiring + App struct
 │       ├── tools.go                 # MCP tool definitions + handlers
-│       └── tools_test.go            # Tool argument validation tests
+│       ├── tools_test.go            # Tool, annotation, schema context tests
+│       ├── resources.go             # MCP resource template handlers
+│       └── resources_test.go        # Resource handler tests
 ├── config.example.yaml
 ├── Dockerfile
 ├── docker-compose.yaml
@@ -246,6 +310,6 @@ go-postgres-mcp/
 
 The server uses `github.com/mark3labs/mcp-go` for the MCP protocol over stdio transport. Schema metadata is crawled from PostgreSQL and cached in a local SQLite database (the "knowledge map"), which enables instant schema lookups and full-text search without hitting the live database.
 
-The SQL guard uses `pg_query_go` which wraps PostgreSQL's actual parser (`libpg_query`). This means SQL validation uses the same parser as PostgreSQL itself — there's no ambiguity about what constitutes a SELECT vs. a mutation. CGO is only needed at build time; the Docker multi-stage build handles this cleanly.
+The SQL guard uses `pg_query_go` which wraps PostgreSQL's actual parser (`libpg_query`). This means SQL validation uses the same parser as PostgreSQL itself — there's no ambiguity about what constitutes a SELECT vs. a mutation. The same parser is also used to extract table references from queries for schema context injection. CGO is only needed at build time; the Docker multi-stage build handles this cleanly.
 
 Discovery can be scoped using schema and table filters in the config. This controls what enters the knowledge map — useful for large databases where you only need visibility into specific schemas or want to hide internal/migration tables from AI tools.
