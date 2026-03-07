@@ -49,11 +49,11 @@ func (a *App) handleResourceTables(ctx context.Context, request mcp.ReadResource
 		ColumnCount int    `json:"column_count"`
 	}
 
-	var entries []tableEntry
+	entries := make([]tableEntry, 0)
 	for _, s := range schemas {
 		tables, err := a.store.ListTables(dbName, s.SchemaName)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("listing tables for schema %s: %w", s.SchemaName, err)
 		}
 		for _, t := range tables {
 			cols, _ := a.store.ListColumnsCompact(dbName, s.SchemaName, t.TableName)

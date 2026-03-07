@@ -48,8 +48,8 @@ func TestHandleResourceTables_EmptyDB(t *testing.T) {
 		t.Fatalf("handleResourceTables: %v", err)
 	}
 	text := contents[0].(mcp.TextResourceContents)
-	if text.Text != "null" {
-		t.Errorf("expected null for empty DB, got %s", text.Text)
+	if text.Text != "[]" {
+		t.Errorf("expected empty array for empty DB, got %s", text.Text)
 	}
 }
 

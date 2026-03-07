@@ -89,6 +89,8 @@ func collectFromNode(node *pg_query.Node, seen map[TableRef]struct{}, refs *[]Ta
 		}
 		schema := rv.Schemaname
 		if schema == "" {
+			// Default to "public" — matches PostgreSQL's default search_path.
+			// For non-public default schemas, users should schema-qualify their queries.
 			schema = "public"
 		}
 		ref := TableRef{Schema: schema, Table: rv.Relname}

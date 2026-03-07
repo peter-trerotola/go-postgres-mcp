@@ -7,23 +7,18 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/petros/go-postgres-mcp/internal/guard"
+	"github.com/petros/go-postgres-mcp/internal/knowledgemap"
 )
 
 const maxRows = 1000
 
-// ColumnSummary is a compact column representation for schema context.
-type ColumnSummary struct {
-	Column string `json:"column"`
-	Type   string `json:"type"`
-}
-
 // QueryResult holds the result of a read-only query.
 type QueryResult struct {
-	Columns       []string                     `json:"columns"`
-	Rows          []json.RawMessage            `json:"rows"`
-	Count         int                          `json:"count"`
-	Truncated     bool                         `json:"truncated"`
-	SchemaContext map[string][]ColumnSummary    `json:"schema_context,omitempty"`
+	Columns       []string                              `json:"columns"`
+	Rows          []json.RawMessage                     `json:"rows"`
+	Count         int                                   `json:"count"`
+	Truncated     bool                                  `json:"truncated"`
+	SchemaContext map[string][]knowledgemap.ColumnSummary `json:"schema_context,omitempty"`
 }
 
 // ReadOnlyQuery executes a SQL query with full read-only enforcement:

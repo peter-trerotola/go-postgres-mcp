@@ -167,19 +167,29 @@ func newTestApp(t *testing.T) *App {
 	t.Cleanup(func() { store.Close() })
 
 	// Seed test data
-	store.InsertDatabase("testdb", "localhost", 5432, "mydb")
-	store.InsertSchema("testdb", "public")
-	store.InsertTable("testdb", knowledgemap.TableInfo{
+	if err := store.InsertDatabase("testdb", "localhost", 5432, "mydb"); err != nil {
+		t.Fatalf("seed database: %v", err)
+	}
+	if err := store.InsertSchema("testdb", "public"); err != nil {
+		t.Fatalf("seed schema: %v", err)
+	}
+	if err := store.InsertTable("testdb", knowledgemap.TableInfo{
 		SchemaName: "public", TableName: "users", TableType: "BASE TABLE",
-	})
-	store.InsertColumn("testdb", knowledgemap.ColumnInfo{
+	}); err != nil {
+		t.Fatalf("seed table: %v", err)
+	}
+	if err := store.InsertColumn("testdb", knowledgemap.ColumnInfo{
 		SchemaName: "public", TableName: "users", ColumnName: "id",
 		Ordinal: 1, DataType: "integer", IsNullable: false,
-	})
-	store.InsertColumn("testdb", knowledgemap.ColumnInfo{
+	}); err != nil {
+		t.Fatalf("seed column id: %v", err)
+	}
+	if err := store.InsertColumn("testdb", knowledgemap.ColumnInfo{
 		SchemaName: "public", TableName: "users", ColumnName: "name",
 		Ordinal: 2, DataType: "text", IsNullable: false,
-	})
+	}); err != nil {
+		t.Fatalf("seed column name: %v", err)
+	}
 
 	mcpSrv := mcpserver.NewMCPServer("test", "0.0.0",
 		mcpserver.WithResourceCapabilities(false, true),

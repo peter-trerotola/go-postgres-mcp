@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/petros/go-postgres-mcp/internal/config"
 	"github.com/petros/go-postgres-mcp/internal/guard"
+	"github.com/petros/go-postgres-mcp/internal/knowledgemap"
 	"github.com/petros/go-postgres-mcp/internal/postgres"
 )
 
@@ -166,24 +167,23 @@ func (a *App) handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mc
 }
 
 // buildSchemaContext extracts table refs from SQL and looks up columns from the knowledge map.
-func (a *App) buildSchemaContext(dbName, sqlStr string) map[string][]postgres.ColumnSummary {
+// Note: SQL is parsed again here after guard.Validate in ReadOnlyQuery. The double parse
+// is intentional — ReadOnlyQuery validates internally as defense-in-depth, and pg_query
+// parsing is sub-millisecond. The Postgres round-trip dominates query latency.
+func (a *App) buildSchemaContext(dbName, sqlStr string) map[string][]knowledgemap.ColumnSummary {
 	tableRefs := guard.ExtractTableRefs(sqlStr)
 	if len(tableRefs) == 0 {
 		return nil
 	}
 
-	ctx := make(map[string][]postgres.ColumnSummary, len(tableRefs))
+	ctx := make(map[string][]knowledgemap.ColumnSummary, len(tableRefs))
 	for _, ref := range tableRefs {
 		cols, err := a.store.ListColumnsCompact(dbName, ref.Schema, ref.Table)
 		if err != nil || len(cols) == 0 {
 			continue
 		}
-		summary := make([]postgres.ColumnSummary, len(cols))
-		for i, c := range cols {
-			summary[i] = postgres.ColumnSummary{Column: c.Column, Type: c.Type}
-		}
 		key := ref.Schema + "." + ref.Table
-		ctx[key] = summary
+		ctx[key] = cols
 	}
 
 	if len(ctx) == 0 {
