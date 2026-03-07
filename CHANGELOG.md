@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.0.1...v1.1.0) (2026-03-07)
+
+
+### Features
+
+* inject knowledge map context into MCP responses ([88b94c0](https://github.com/peter-trerotola/go-postgres-mcp/commit/88b94c0dfe9499d3bf7592d2eb4b66fbf8eb4349))
+
+
+### Bug Fixes
+
+* address PR review feedback ([ab4bada](https://github.com/peter-trerotola/go-postgres-mcp/commit/ab4badac8e9b6e6931a0e2c9c3363ab461a979f4))
+
 ## [1.0.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.0.0...v1.0.1) (2026-03-07)
 
 
