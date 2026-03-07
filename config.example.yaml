@@ -1,0 +1,27 @@
+databases:
+  - name: "testdb"
+    host: "postgres"
+    port: 5432
+    database: "testdb"
+    user: "testuser"
+    password_env: "TEST_DB_PASSWORD"
+    sslmode: "disable"
+
+    # Optional: only discover these schemas (all non-system schemas if omitted)
+    # schemas:
+    #   - "public"
+    #   - "billing"
+
+    # Optional: filter which tables are discovered (mutually exclusive)
+    # Tables must be in schema.table format.
+    # tables:
+    #   include:                  # whitelist mode: only these tables
+    #     - "public.users"
+    #     - "public.orders"
+    #   exclude:                  # blacklist mode: all except these
+    #     - "public.migrations"
+    #     - "public.sessions"
+
+knowledgemap:
+  path: "/data/knowledgemap.db"
+  auto_discover_on_startup: true

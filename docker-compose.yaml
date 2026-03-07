@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-testuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-testpass}
+      POSTGRES_DB: ${POSTGRES_DB:-testdb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-testuser} -d ${POSTGRES_DB:-testdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mcp-server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TEST_DB_PASSWORD: ${POSTGRES_PASSWORD:-testpass}
+    volumes:
+      - ./config.example.yaml:/etc/go-postgres-mcp/config.yaml:ro
+      - kmdata:/data
+    stdin_open: true
+
+volumes:
+  pgdata:
+  kmdata:

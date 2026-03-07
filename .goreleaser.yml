@@ -1,0 +1,54 @@
+version: 2
+
+project_name: go-postgres-mcp
+
+builds:
+  - id: linux-amd64
+    main: ./cmd/main.go
+    binary: go-postgres-mcp
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=gcc
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  - id: linux-arm64
+    main: ./cmd/main.go
+    binary: go-postgres-mcp
+    goos:
+      - linux
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: peter-trerotola
+    name: go-postgres-mcp
