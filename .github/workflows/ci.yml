@@ -40,3 +40,18 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t go-postgres-mcp .
+
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: CGO_ENABLED=1 go test ./... -v -race
+
+      - name: Build binary
+        run: CGO_ENABLED=1 go build -o go-postgres-mcp ./cmd/main.go
