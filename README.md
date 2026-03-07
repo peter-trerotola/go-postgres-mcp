@@ -290,7 +290,7 @@ Find the appropriate test function and slice, then add your case:
 
 // In TestAdversarial_FunctionCalls — dangerous functions that pass Tier 1
 // but are caught by Tier 2+ (connection/transaction read-only):
-{"my dangerous function", "SELECT my_scary_func()", "tier2+"},
+{"my dangerous function", "SELECT my_scary_func()", "tier2"},
 
 // In TestAdversarial_EdgeCases — valid SELECTs that must be allowed:
 {"allowed_my complex but safe query", "SELECT ...", "tier1"},

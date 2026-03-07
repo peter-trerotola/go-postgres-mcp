@@ -32,6 +32,7 @@ import "testing"
 //        "tier2" = Connection-level read-only catches it at runtime
 //        "tier3" = Transaction-level READ ONLY catches it at runtime
 //        "tier4" = PostgreSQL user grants prevent execution
+//        "none"  = Not caught by tiers 1-4 (needs external controls like statement_timeout)
 //   4. Run: go test ./internal/guard/ -run TestAdversarial -v
 //
 // If you find a query that bypasses ALL tiers, please open a security issue.
@@ -280,10 +281,13 @@ func TestAdversarial_FunctionCalls(t *testing.T) {
 		{"pg_cancel_backend", "SELECT pg_cancel_backend(1234)", "tier4"},
 
 		// --- DoS via resource consumption ---
-		{"pg_sleep", "SELECT pg_sleep(3600)", "tier2"},
-		{"pg_sleep in subquery", "SELECT * FROM users WHERE pg_sleep(1) IS NOT NULL", "tier2"},
-		{"generate_series large", "SELECT * FROM generate_series(1, 1000000000)", "tier2"},
-		{"recursive CTE infinite", "WITH RECURSIVE inf AS (SELECT 1 AS x UNION ALL SELECT x+1 FROM inf) SELECT * FROM inf", "tier2"},
+		// These are valid read-only SELECTs that tiers 1-4 do not block.
+		// Mitigation requires external controls: statement_timeout, resource limits,
+		// connection pool timeouts, or pg_cancel_backend.
+		{"pg_sleep", "SELECT pg_sleep(3600)", "none"},
+		{"pg_sleep in subquery", "SELECT * FROM users WHERE pg_sleep(1) IS NOT NULL", "none"},
+		{"generate_series large", "SELECT * FROM generate_series(1, 1000000000)", "none"},
+		{"recursive CTE infinite", "WITH RECURSIVE inf AS (SELECT 1 AS x UNION ALL SELECT x+1 FROM inf) SELECT * FROM inf", "none"},
 
 		// --- Advisory locks (can deadlock, caught by Tier 2/3) ---
 		{"pg_advisory_lock", "SELECT pg_advisory_lock(1)", "tier2"},
@@ -354,10 +358,6 @@ func TestAdversarial_CommentAndEncoding(t *testing.T) {
 		{"only block comment", "/* nothing here */", "tier1"},
 	}
 
-	// Null bytes: libpg_query (C) truncates at \x00 and only sees "SELECT 1".
-	// PostgreSQL's wire protocol also truncates at null bytes, so the trailing
-	// "; DROP TABLE users" never reaches the server. This is safe — not a bypass.
-
 	for _, tc := range mustBlock {
 		t.Run(tc.name, func(t *testing.T) {
 			err := Validate(tc.sql)
@@ -376,6 +376,11 @@ func TestAdversarial_CommentAndEncoding(t *testing.T) {
 		{"dollar-quoted tagged string", "SELECT $tag$DELETE FROM users$tag$", "tier1"},
 		{"E-string with escapes", "SELECT E'INSERT\\nINTO\\nusers'", "tier1"},
 		{"concat of keywords", "SELECT 'DROP' || ' TABLE' || ' users'", "tier1"},
+
+		// Null bytes: libpg_query (C) truncates at \x00 so it only sees "SELECT 1".
+		// PostgreSQL's wire protocol also truncates at null bytes, so the trailing
+		// "; DROP TABLE users" never reaches the server. This is safe — not a bypass.
+		{"null byte truncation", "SELECT 1\x00; DROP TABLE users", "tier1"},
 	}
 
 	for _, tc := range allowedStrings {
