@@ -33,12 +33,10 @@ builds:
     ldflags:
       - -s -w
 
-  # macOS targets use Zig as C cross-compiler from Linux.
-  # -DHAVE_STRCHRNUL: pg_query_go's bundled C code defines a static strchrnul
-  #   which conflicts with macOS 15.4+ SDK headers. This tells it to use the
-  #   system's strchrnul instead.
-  # netgo: uses Go's pure DNS resolver to avoid linking macOS libresolv,
-  #   which isn't available in Zig's cross-compilation sysroot.
+  # macOS targets are built natively on macOS runners (not cross-compiled).
+  # CI uses macos-14 because pg_query_go's bundled C code conflicts with the
+  # macOS 15.4+ SDK (strchrnul redeclaration). macos-14 has Xcode 16.2 which
+  # ships the macOS 15.2 SDK, avoiding this issue.
   - id: darwin-amd64
     main: ./cmd/main.go
     binary: go-postgres-mcp
@@ -48,11 +46,8 @@ builds:
       - amd64
     env:
       - CGO_ENABLED=1
-      - CGO_CFLAGS=-DHAVE_STRCHRNUL
-      - CC=zig cc -target x86_64-macos
     flags:
       - -trimpath
-      - -tags=netgo
     ldflags:
       - -s -w
 
@@ -65,11 +60,8 @@ builds:
       - arm64
     env:
       - CGO_ENABLED=1
-      - CGO_CFLAGS=-DHAVE_STRCHRNUL
-      - CC=zig cc -target aarch64-macos
     flags:
       - -trimpath
-      - -tags=netgo
     ldflags:
       - -s -w
 
