@@ -266,6 +266,60 @@ go test ./internal/guard/... -v
 go test ./internal/knowledgemap/... -v
 ```
 
+## Contributing Adversarial Tests
+
+The file `internal/guard/adversarial_test.go` contains ~200 test cases that attempt to bypass the read-only guard. These are organized as table-driven tests, making it easy to add new cases.
+
+### Adding a test case
+
+Each case is a simple struct with three fields:
+
+```go
+type adversarialCase struct {
+    name string // descriptive name for the test
+    sql  string // the SQL to test
+    tier string // which tier blocks it: "tier1", "tier2", "tier3", "tier4"
+}
+```
+
+Find the appropriate test function and slice, then add your case:
+
+```go
+// In TestAdversarial_MustBlock — SQL that Tier 1 (AST parser) must reject:
+{"my new bypass attempt", "SELECT 1; DROP TABLE pwned", "tier1"},
+
+// In TestAdversarial_FunctionCalls — dangerous functions that pass Tier 1
+// but are caught by Tier 2+ (connection/transaction read-only):
+{"my dangerous function", "SELECT my_scary_func()", "tier2+"},
+
+// In TestAdversarial_EdgeCases — valid SELECTs that must be allowed:
+{"allowed_my complex but safe query", "SELECT ...", "tier1"},
+```
+
+### Test categories
+
+| Test function | What it tests |
+|---|---|
+| `TestAdversarial_MustBlock` | SQL that the AST parser (Tier 1) **must reject** — mutations, DDL, session commands, etc. |
+| `TestAdversarial_FunctionCalls` | Dangerous function calls in SELECT (e.g. `pg_terminate_backend`, `set_config`). These pass Tier 1 but are caught by Tiers 2-4. |
+| `TestAdversarial_CommentAndEncoding` | Tricks using comments, dollar-quoting, null bytes, whitespace, and encoding |
+| `TestAdversarial_EdgeCases` | Complex but valid queries that **must be allowed** (window functions, nested subqueries, CTEs, UNION trees), plus mutations hidden inside complex structures that must be blocked |
+
+### Running just the adversarial tests
+
+```bash
+go test ./internal/guard/ -run TestAdversarial -v
+```
+
+### Tier reference
+
+- **Tier 1** (AST parser) — `guard.Validate()` rejects non-SELECT statements at parse time
+- **Tier 2** (connection) — `default_transaction_read_only=on` on every pgx pool connection
+- **Tier 3** (transaction) — `BEGIN READ ONLY` wraps every query execution
+- **Tier 4** (PostgreSQL user) — database user with only SELECT grants
+
+If you find SQL that bypasses all four tiers, please open an issue.
+
 ## Project Structure
 
 ```
@@ -280,7 +334,8 @@ go-postgres-mcp/
 │   │   ├── parser.go                # Tier 1: AST validation + table ref extraction
 │   │   ├── parser_test.go           # ExtractTableRefs tests (JOINs, CTEs, etc.)
 │   │   ├── guard.go                 # Guard entry point + ForbiddenError type
-│   │   └── guard_test.go            # Comprehensive read-only enforcement tests
+│   │   ├── guard_test.go            # Comprehensive read-only enforcement tests
+│   │   └── adversarial_test.go      # ~200 adversarial bypass attempt tests
 │   ├── postgres/
 │   │   ├── pool.go                  # Connection pool manager (Tier 2)
 │   │   ├── pool_test.go             # Pool manager unit tests
