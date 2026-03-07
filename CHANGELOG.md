@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.1.0...v1.1.1) (2026-03-07)
+
+
+### Bug Fixes
+
+* upgrade all dependencies and add macOS builds ([#22](https://github.com/peter-trerotola/go-postgres-mcp/issues/22)) ([563da01](https://github.com/peter-trerotola/go-postgres-mcp/commit/563da01a234d0d06af5d1749757733c4c217fb70))
+* upgrade all dependencies and GitHub Actions ([#20](https://github.com/peter-trerotola/go-postgres-mcp/issues/20)) ([1c238f3](https://github.com/peter-trerotola/go-postgres-mcp/commit/1c238f3266deb1e6cf8a8852690d940e92ef80d1))
+
 ## [1.1.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.0.1...v1.1.0) (2026-03-07)
 
 
