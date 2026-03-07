@@ -20,10 +20,10 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite: %w", err)
 	}
-	// Serialize all SQLite access through a single connection.
-	// This prevents SQLITE_BUSY errors during concurrent discovery
-	// while PG queries still run in parallel across goroutines.
-	db.SetMaxOpenConns(1)
+	// Allow concurrent readers under WAL mode while keeping the pool small.
+	// WAL mode handles reader/writer concurrency; busy_timeout handles
+	// write contention from concurrent discovery goroutines.
+	db.SetMaxOpenConns(4)
 	if _, err := db.Exec(ddl); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("initializing schema: %w", err)

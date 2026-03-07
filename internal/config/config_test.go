@@ -682,6 +682,34 @@ databases:
 	}
 }
 
+func TestMaxPoolConns_Default(t *testing.T) {
+	db := DatabaseConfig{Name: "test"}
+	if got := db.MaxPoolConns(); got != 5 {
+		t.Errorf("expected default 5, got %d", got)
+	}
+}
+
+func TestMaxPoolConns_Zero(t *testing.T) {
+	db := DatabaseConfig{Name: "test", MaxConns: 0}
+	if got := db.MaxPoolConns(); got != 5 {
+		t.Errorf("expected default 5 for zero value, got %d", got)
+	}
+}
+
+func TestMaxPoolConns_Negative(t *testing.T) {
+	db := DatabaseConfig{Name: "test", MaxConns: -1}
+	if got := db.MaxPoolConns(); got != 5 {
+		t.Errorf("expected default 5 for negative value, got %d", got)
+	}
+}
+
+func TestMaxPoolConns_Positive(t *testing.T) {
+	db := DatabaseConfig{Name: "test", MaxConns: 20}
+	if got := db.MaxPoolConns(); got != 20 {
+		t.Errorf("expected 20, got %d", got)
+	}
+}
+
 func writeTemp(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()

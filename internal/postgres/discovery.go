@@ -73,6 +73,9 @@ func Discover(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConf
 		return err
 	}
 
+	// Release the PG connection before building the SQLite search index.
+	tx.Rollback(ctx)
+
 	if err := store.IndexForSearch(dbCfg.Name); err != nil {
 		return fmt.Errorf("building search index: %w", err)
 	}
