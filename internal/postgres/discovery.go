@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,13 +14,10 @@ import (
 // All existing knowledge map data for the database is cleared and then re-inserted.
 // Schema and table filters from the config are applied during discovery.
 //
-// All 8 PG queries (schemas, tables, columns, constraints, indexes, foreign
-// keys, views, functions) run concurrently using separate read-only transactions.
-// This trades strict snapshot consistency for parallelism — concurrent DDL during
-// discovery could yield slightly inconsistent results. This is acceptable because
-// the target is a read-only replica where DDL does not occur, and re-discovery
-// corrects any transient inconsistencies.
-// Results are written to SQLite in dependency order: schemas → tables → everything else.
+// Queries run sequentially within a single read-only transaction, with SQLite
+// writes interleaved after each query (pipeline pattern). This is faster than
+// fetching everything first because PG I/O and SQLite writes overlap.
+// Cross-database parallelism is handled by the caller (server.Start).
 func Discover(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	if err := store.ClearDatabase(dbCfg.Name); err != nil {
 		return fmt.Errorf("clearing database %q: %w", dbCfg.Name, err)
@@ -31,178 +27,50 @@ func Discover(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConf
 		return fmt.Errorf("inserting database record: %w", err)
 	}
 
-	// Fetch all metadata from PG concurrently.
-	var (
-		schemas     []string
-		tables      []knowledgemap.TableInfo
-		columns     []knowledgemap.ColumnInfo
-		constraints []knowledgemap.ConstraintInfo
-		indexes     []knowledgemap.IndexInfo
-		foreignKeys []knowledgemap.ForeignKeyInfo
-		views       []knowledgemap.ViewInfo
-		functions   []knowledgemap.FunctionInfo
-		wg          sync.WaitGroup
-		mu          sync.Mutex
-		firstErr    error
-	)
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("beginning read-only transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
 
-	setErr := func(err error) {
-		mu.Lock()
-		if firstErr == nil {
-			firstErr = err
-		}
-		mu.Unlock()
+	// Schemas
+	if err := discoverSchemas(ctx, tx, dbCfg, store); err != nil {
+		return err
 	}
 
-	wg.Add(8)
-	go func() {
-		defer wg.Done()
-		tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-		if err != nil {
-			setErr(fmt.Errorf("beginning schemas transaction: %w", err))
-			return
-		}
-		defer tx.Rollback(ctx)
-		res, err := discoverSchemas(ctx, tx)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		schemas = res
-		mu.Unlock()
-	}()
-	go func() {
-		defer wg.Done()
-		tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-		if err != nil {
-			setErr(fmt.Errorf("beginning tables transaction: %w", err))
-			return
-		}
-		defer tx.Rollback(ctx)
-		res, err := fetchTables(ctx, tx, dbCfg)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		tables = res
-		mu.Unlock()
-	}()
-	go func() {
-		defer wg.Done()
-		res, err := fetchColumns(ctx, pool, dbCfg)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		columns = res
-		mu.Unlock()
-	}()
-	go func() {
-		defer wg.Done()
-		res, err := fetchConstraints(ctx, pool, dbCfg)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		constraints = res
-		mu.Unlock()
-	}()
-	go func() {
-		defer wg.Done()
-		res, err := fetchIndexes(ctx, pool, dbCfg)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		indexes = res
-		mu.Unlock()
-	}()
-	go func() {
-		defer wg.Done()
-		res, err := fetchForeignKeys(ctx, pool, dbCfg)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		foreignKeys = res
-		mu.Unlock()
-	}()
-	go func() {
-		defer wg.Done()
-		res, err := fetchViews(ctx, pool, dbCfg)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		views = res
-		mu.Unlock()
-	}()
-	go func() {
-		defer wg.Done()
-		res, err := fetchFunctions(ctx, pool, dbCfg)
-		if err != nil {
-			setErr(err)
-			return
-		}
-		mu.Lock()
-		functions = res
-		mu.Unlock()
-	}()
-	wg.Wait()
-	if firstErr != nil {
-		return firstErr
+	// Tables
+	if err := discoverTables(ctx, tx, dbCfg, store); err != nil {
+		return err
 	}
 
-	// Write to SQLite in dependency order: schemas → tables → rest.
-	for _, s := range schemas {
-		if !dbCfg.ShouldIncludeSchema(s) {
-			continue
-		}
-		if err := store.InsertSchema(dbCfg.Name, s); err != nil {
-			return fmt.Errorf("inserting schema %q: %w", s, err)
-		}
+	// Columns
+	if err := discoverColumns(ctx, tx, dbCfg, store); err != nil {
+		return err
 	}
-	for _, t := range tables {
-		if err := store.InsertTable(dbCfg.Name, t); err != nil {
-			return err
-		}
+
+	// Constraints
+	if err := discoverConstraints(ctx, tx, dbCfg, store); err != nil {
+		return err
 	}
-	for _, c := range columns {
-		if err := store.InsertColumn(dbCfg.Name, c); err != nil {
-			return err
-		}
+
+	// Indexes
+	if err := discoverIndexes(ctx, tx, dbCfg, store); err != nil {
+		return err
 	}
-	for _, c := range constraints {
-		if err := store.InsertConstraint(dbCfg.Name, c); err != nil {
-			return err
-		}
+
+	// Foreign keys
+	if err := discoverForeignKeys(ctx, tx, dbCfg, store); err != nil {
+		return err
 	}
-	for _, idx := range indexes {
-		if err := store.InsertIndex(dbCfg.Name, idx); err != nil {
-			return err
-		}
+
+	// Views
+	if err := discoverViews(ctx, tx, dbCfg, store); err != nil {
+		return err
 	}
-	for _, fk := range foreignKeys {
-		if err := store.InsertForeignKey(dbCfg.Name, fk); err != nil {
-			return err
-		}
-	}
-	for _, v := range views {
-		if err := store.InsertView(dbCfg.Name, v); err != nil {
-			return err
-		}
-	}
-	for _, f := range functions {
-		if err := store.InsertFunction(dbCfg.Name, f); err != nil {
-			return err
-		}
+
+	// Functions
+	if err := discoverFunctions(ctx, tx, dbCfg, store); err != nil {
+		return err
 	}
 
 	if err := store.IndexForSearch(dbCfg.Name); err != nil {
@@ -212,28 +80,32 @@ func Discover(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConf
 	return nil
 }
 
-func discoverSchemas(ctx context.Context, tx pgx.Tx) ([]string, error) {
+func discoverSchemas(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT schema_name FROM information_schema.schemata
 		WHERE schema_name NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		ORDER BY schema_name`)
 	if err != nil {
-		return nil, fmt.Errorf("querying schemas: %w", err)
+		return fmt.Errorf("querying schemas: %w", err)
 	}
 	defer rows.Close()
 
-	var schemas []string
 	for rows.Next() {
 		var s string
 		if err := rows.Scan(&s); err != nil {
-			return nil, err
+			return err
 		}
-		schemas = append(schemas, s)
+		if !dbCfg.ShouldIncludeSchema(s) {
+			continue
+		}
+		if err := store.InsertSchema(dbCfg.Name, s); err != nil {
+			return fmt.Errorf("inserting schema %q: %w", s, err)
+		}
 	}
-	return schemas, rows.Err()
+	return rows.Err()
 }
 
-func fetchTables(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig) ([]knowledgemap.TableInfo, error) {
+func discoverTables(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT
 			t.table_schema,
@@ -249,31 +121,26 @@ func fetchTables(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig) ([
 		  AND t.table_type = 'BASE TABLE'
 		ORDER BY t.table_schema, t.table_name`)
 	if err != nil {
-		return nil, fmt.Errorf("querying tables: %w", err)
+		return fmt.Errorf("querying tables: %w", err)
 	}
 	defer rows.Close()
 
-	var result []knowledgemap.TableInfo
 	for rows.Next() {
 		var t knowledgemap.TableInfo
 		if err := rows.Scan(&t.SchemaName, &t.TableName, &t.TableType, &t.RowEstimate, &t.SizeBytes, &t.Description); err != nil {
-			return nil, err
+			return err
 		}
 		if !dbCfg.ShouldIncludeSchema(t.SchemaName) || !dbCfg.ShouldIncludeTable(t.SchemaName, t.TableName) {
 			continue
 		}
-		result = append(result, t)
+		if err := store.InsertTable(dbCfg.Name, t); err != nil {
+			return err
+		}
 	}
-	return result, rows.Err()
+	return rows.Err()
 }
 
-func fetchColumns(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConfig) ([]knowledgemap.ColumnInfo, error) {
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, fmt.Errorf("beginning columns transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
+func discoverColumns(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT
 			c.table_schema,
@@ -293,32 +160,27 @@ func fetchColumns(ctx context.Context, pool *pgxpool.Pool, dbCfg config.Database
 		WHERE c.table_schema NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		ORDER BY c.table_schema, c.table_name, c.ordinal_position`)
 	if err != nil {
-		return nil, fmt.Errorf("querying columns: %w", err)
+		return fmt.Errorf("querying columns: %w", err)
 	}
 	defer rows.Close()
 
-	var result []knowledgemap.ColumnInfo
 	for rows.Next() {
 		var col knowledgemap.ColumnInfo
 		if err := rows.Scan(&col.SchemaName, &col.TableName, &col.ColumnName,
 			&col.Ordinal, &col.DataType, &col.IsNullable, &col.ColumnDefault, &col.Description); err != nil {
-			return nil, err
+			return err
 		}
 		if !dbCfg.ShouldIncludeSchema(col.SchemaName) || !dbCfg.ShouldIncludeTable(col.SchemaName, col.TableName) {
 			continue
 		}
-		result = append(result, col)
+		if err := store.InsertColumn(dbCfg.Name, col); err != nil {
+			return err
+		}
 	}
-	return result, rows.Err()
+	return rows.Err()
 }
 
-func fetchConstraints(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConfig) ([]knowledgemap.ConstraintInfo, error) {
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, fmt.Errorf("beginning constraints transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
+func discoverConstraints(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT
 			n.nspname AS schema_name,
@@ -339,31 +201,26 @@ func fetchConstraints(ctx context.Context, pool *pgxpool.Pool, dbCfg config.Data
 		  AND c.relkind <> 'm'
 		ORDER BY n.nspname, c.relname, con.conname`)
 	if err != nil {
-		return nil, fmt.Errorf("querying constraints: %w", err)
+		return fmt.Errorf("querying constraints: %w", err)
 	}
 	defer rows.Close()
 
-	var result []knowledgemap.ConstraintInfo
 	for rows.Next() {
 		var con knowledgemap.ConstraintInfo
 		if err := rows.Scan(&con.SchemaName, &con.TableName, &con.ConstraintName, &con.ConstraintType, &con.Definition); err != nil {
-			return nil, err
+			return err
 		}
 		if !dbCfg.ShouldIncludeSchema(con.SchemaName) || !dbCfg.ShouldIncludeTable(con.SchemaName, con.TableName) {
 			continue
 		}
-		result = append(result, con)
+		if err := store.InsertConstraint(dbCfg.Name, con); err != nil {
+			return err
+		}
 	}
-	return result, rows.Err()
+	return rows.Err()
 }
 
-func fetchIndexes(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConfig) ([]knowledgemap.IndexInfo, error) {
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, fmt.Errorf("beginning indexes transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
+func discoverIndexes(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT
 			n.nspname AS schema_name,
@@ -380,31 +237,26 @@ func fetchIndexes(ctx context.Context, pool *pgxpool.Pool, dbCfg config.Database
 		  AND t.relkind <> 'm'
 		ORDER BY n.nspname, t.relname, i.relname`)
 	if err != nil {
-		return nil, fmt.Errorf("querying indexes: %w", err)
+		return fmt.Errorf("querying indexes: %w", err)
 	}
 	defer rows.Close()
 
-	var result []knowledgemap.IndexInfo
 	for rows.Next() {
 		var idx knowledgemap.IndexInfo
 		if err := rows.Scan(&idx.SchemaName, &idx.TableName, &idx.IndexName, &idx.IsUnique, &idx.IsPrimary, &idx.Definition); err != nil {
-			return nil, err
+			return err
 		}
 		if !dbCfg.ShouldIncludeSchema(idx.SchemaName) || !dbCfg.ShouldIncludeTable(idx.SchemaName, idx.TableName) {
 			continue
 		}
-		result = append(result, idx)
+		if err := store.InsertIndex(dbCfg.Name, idx); err != nil {
+			return err
+		}
 	}
-	return result, rows.Err()
+	return rows.Err()
 }
 
-func fetchForeignKeys(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConfig) ([]knowledgemap.ForeignKeyInfo, error) {
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, fmt.Errorf("beginning foreign keys transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
+func discoverForeignKeys(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT
 			n.nspname AS schema_name,
@@ -426,32 +278,27 @@ func fetchForeignKeys(ctx context.Context, pool *pgxpool.Pool, dbCfg config.Data
 		  AND n.nspname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		ORDER BY n.nspname, c.relname, con.conname, cols.ord`)
 	if err != nil {
-		return nil, fmt.Errorf("querying foreign keys: %w", err)
+		return fmt.Errorf("querying foreign keys: %w", err)
 	}
 	defer rows.Close()
 
-	var result []knowledgemap.ForeignKeyInfo
 	for rows.Next() {
 		var fk knowledgemap.ForeignKeyInfo
 		if err := rows.Scan(&fk.SchemaName, &fk.TableName, &fk.ConstraintName, &fk.ColumnName,
 			&fk.RefSchema, &fk.RefTable, &fk.RefColumn); err != nil {
-			return nil, err
+			return err
 		}
 		if !dbCfg.ShouldIncludeSchema(fk.SchemaName) || !dbCfg.ShouldIncludeTable(fk.SchemaName, fk.TableName) {
 			continue
 		}
-		result = append(result, fk)
+		if err := store.InsertForeignKey(dbCfg.Name, fk); err != nil {
+			return err
+		}
 	}
-	return result, rows.Err()
+	return rows.Err()
 }
 
-func fetchViews(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConfig) ([]knowledgemap.ViewInfo, error) {
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, fmt.Errorf("beginning views transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
+func discoverViews(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT
 			v.schemaname AS schema_name,
@@ -462,31 +309,26 @@ func fetchViews(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseCo
 		WHERE v.schemaname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		ORDER BY v.schemaname, v.viewname`)
 	if err != nil {
-		return nil, fmt.Errorf("querying views: %w", err)
+		return fmt.Errorf("querying views: %w", err)
 	}
 	defer rows.Close()
 
-	var result []knowledgemap.ViewInfo
 	for rows.Next() {
 		var view knowledgemap.ViewInfo
 		if err := rows.Scan(&view.SchemaName, &view.ViewName, &view.Definition, &view.Description); err != nil {
-			return nil, err
+			return err
 		}
 		if !dbCfg.ShouldIncludeSchema(view.SchemaName) {
 			continue
 		}
-		result = append(result, view)
+		if err := store.InsertView(dbCfg.Name, view); err != nil {
+			return err
+		}
 	}
-	return result, rows.Err()
+	return rows.Err()
 }
 
-func fetchFunctions(ctx context.Context, pool *pgxpool.Pool, dbCfg config.DatabaseConfig) ([]knowledgemap.FunctionInfo, error) {
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return nil, fmt.Errorf("beginning functions transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
+func discoverFunctions(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, store *knowledgemap.Store) error {
 	rows, err := tx.Query(ctx, `
 		SELECT
 			n.nspname AS schema_name,
@@ -502,20 +344,21 @@ func fetchFunctions(ctx context.Context, pool *pgxpool.Pool, dbCfg config.Databa
 		  AND p.prokind IN ('f', 'w')
 		ORDER BY n.nspname, p.proname`)
 	if err != nil {
-		return nil, fmt.Errorf("querying functions: %w", err)
+		return fmt.Errorf("querying functions: %w", err)
 	}
 	defer rows.Close()
 
-	var result []knowledgemap.FunctionInfo
 	for rows.Next() {
 		var fn knowledgemap.FunctionInfo
 		if err := rows.Scan(&fn.SchemaName, &fn.FunctionName, &fn.ResultType, &fn.ArgTypes, &fn.Description, &fn.Language); err != nil {
-			return nil, err
+			return err
 		}
 		if !dbCfg.ShouldIncludeSchema(fn.SchemaName) {
 			continue
 		}
-		result = append(result, fn)
+		if err := store.InsertFunction(dbCfg.Name, fn); err != nil {
+			return err
+		}
 	}
-	return result, rows.Err()
+	return rows.Err()
 }

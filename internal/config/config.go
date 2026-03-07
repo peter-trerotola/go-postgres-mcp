@@ -27,10 +27,10 @@ type DatabaseConfig struct {
 	Tables      TableFilter `yaml:"tables"`
 }
 
-// MaxPoolConns returns the configured max pool connections, defaulting to 10.
+// MaxPoolConns returns the configured max pool connections, defaulting to 5.
 func (d *DatabaseConfig) MaxPoolConns() int32 {
 	if d.MaxConns <= 0 {
-		return 10
+		return 5
 	}
 	return d.MaxConns
 }
