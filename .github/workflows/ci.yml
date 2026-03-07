@@ -40,7 +40,7 @@ jobs:
       - name: Build Linux targets (GoReleaser snapshot)
         uses: goreleaser/goreleaser-action@v7
         with:
-          version: latest
+          version: "~> v2"
           args: build --snapshot --clean --id linux-amd64 --id linux-arm64
 
       - name: Build Docker image
@@ -63,5 +63,5 @@ jobs:
       - name: Build macOS targets (GoReleaser snapshot)
         uses: goreleaser/goreleaser-action@v7
         with:
-          version: latest
+          version: "~> v2"
           args: build --snapshot --clean --id darwin-amd64 --id darwin-arm64

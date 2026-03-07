@@ -65,7 +65,7 @@ jobs:
       - name: Build Linux targets
         uses: goreleaser/goreleaser-action@v7
         with:
-          version: latest
+          version: "~> v2"
           args: build --clean --id linux-amd64 --id linux-arm64
 
       - name: Archive Linux binaries
@@ -102,7 +102,7 @@ jobs:
       - name: Build macOS targets
         uses: goreleaser/goreleaser-action@v7
         with:
-          version: latest
+          version: "~> v2"
           args: build --clean --id darwin-amd64 --id darwin-arm64
 
       - name: Archive macOS binaries
@@ -146,7 +146,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "$TAG" archives/* --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$TAG" --clobber archives/* --repo "$GITHUB_REPOSITORY"
 
   docker:
     runs-on: ubuntu-latest

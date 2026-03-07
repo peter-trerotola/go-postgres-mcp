@@ -33,8 +33,9 @@ builds:
     ldflags:
       - -s -w
 
-  # macOS targets are built natively on macOS runners (not cross-compiled).
-  # CI uses macos-14 because pg_query_go's bundled C code conflicts with the
+  # macOS targets require a macOS host (not cross-compiled). In CI, these are
+  # built with --id darwin-amd64 --id darwin-arm64 on a macos-14 runner.
+  # macos-14 is used because pg_query_go's bundled C code conflicts with the
   # macOS 15.4+ SDK (strchrnul redeclaration). macos-14 has Xcode 16.2 which
   # ships the macOS 15.2 SDK, avoiding this issue.
   - id: darwin-amd64
