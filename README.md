@@ -111,6 +111,31 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO readonly_user;
 ```
 
+## Installation
+
+### Prebuilt binaries
+
+Download from [GitHub Releases](https://github.com/peter-trerotola/go-postgres-mcp/releases):
+
+```bash
+# Linux amd64
+curl -L https://github.com/peter-trerotola/go-postgres-mcp/releases/latest/download/go-postgres-mcp_linux_amd64.tar.gz | tar xz
+```
+
+### Docker
+
+```bash
+docker pull ghcr.io/peter-trerotola/go-postgres-mcp:latest
+```
+
+### Build from source
+
+Requires Go 1.23+ and a C compiler (for `pg_query_go`):
+
+```bash
+CGO_ENABLED=1 go build -o go-postgres-mcp ./cmd/main.go
+```
+
 ## Quick Start
 
 ### Docker Compose (development)
@@ -121,17 +146,10 @@ docker compose up
 
 This starts a PostgreSQL instance and the MCP server with auto-discovery enabled.
 
-### Docker Build
-
-```bash
-docker build -t go-postgres-mcp .
-```
-
 ### Run directly
 
 ```bash
 export PROD_DB_PASSWORD="your_password"
-go build -o go-postgres-mcp ./cmd/main.go
 ./go-postgres-mcp -config config.yaml
 ```
 
