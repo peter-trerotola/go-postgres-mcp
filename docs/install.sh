@@ -10,53 +10,107 @@ set -e
 
 REPO="peter-trerotola/go-postgres-mcp"
 BINARY="go-postgres-mcp"
+SETUP_URL="https://peter-trerotola.github.io/go-postgres-mcp/setup.sh"
 
-log() { echo "  $1"; }
-fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
+# --- colors (tty-aware) ---
 
-# Detect OS
+if [ -t 2 ]; then
+  BOLD="$(tput bold 2>/dev/null || printf '')"
+  DIM="$(tput dim 2>/dev/null || printf '')"
+  RED="$(tput setaf 1 2>/dev/null || printf '')"
+  GREEN="$(tput setaf 2 2>/dev/null || printf '')"
+  YELLOW="$(tput setaf 3 2>/dev/null || printf '')"
+  BLUE="$(tput setaf 4 2>/dev/null || printf '')"
+  MAGENTA="$(tput setaf 5 2>/dev/null || printf '')"
+  RST="$(tput sgr0 2>/dev/null || printf '')"
+else
+  BOLD='' DIM='' RED='' GREEN='' YELLOW='' BLUE='' MAGENTA='' RST=''
+fi
+
+# --- message helpers ---
+
+ohai()      { printf '%s==>%s %s%s\n' "$BLUE" "$BOLD" "$*" "$RST" >&2; }
+info()      { printf '   %s\n' "$*" >&2; }
+ok()        { printf '   %s✓%s %s\n' "$GREEN" "$RST" "$*" >&2; }
+warn()      { printf '   %s!%s %s\n' "$YELLOW" "$RST" "$*" >&2; }
+fail()      { printf '   %sx%s %s\n' "$RED" "$RST" "$*" >&2; exit 1; }
+
+ask_yn() {
+  printf '   %s?%s %s %s[y/n]%s ' "$MAGENTA" "$RST" "$1" "$BOLD" "$RST" >&2
+  read -r val </dev/tty
+  case "$val" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+# --- detect platform ---
+
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$OS" in
   linux|darwin) ;;
-  *) fail "Unsupported OS: $OS" ;;
+  *) fail "unsupported OS: ${OS}" ;;
 esac
 
-# Detect architecture
 ARCH=$(uname -m)
 case "$ARCH" in
   x86_64|amd64) ARCH="amd64" ;;
   aarch64|arm64) ARCH="arm64" ;;
-  *) fail "Unsupported architecture: $ARCH" ;;
+  *) fail "unsupported architecture: ${ARCH}" ;;
 esac
 
-# Resolve version
+# --- resolve version ---
+
 if [ -z "$VERSION" ]; then
   VERSION=$(curl -sfL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
-  [ -z "$VERSION" ] && fail "Could not determine latest version"
+  [ -z "$VERSION" ] && fail "could not determine latest version"
 fi
 
-# Strip leading v for filename
 VERSION_NUM="${VERSION#v}"
 
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 TARBALL="${BINARY}_${VERSION_NUM}_${OS}_${ARCH}.tar.gz"
 BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
 
-echo "Installing ${BINARY} ${VERSION} (${OS}/${ARCH})"
+# --- install ---
+
+printf '\n' >&2
+printf '%s' "$BLUE" >&2
+cat >&2 <<'BANNER'
+   .------------------------------------------------------.
+   | what time of day do users sign up most often?          |
+   '----.--------------------------------------------------'
+        |
+     ,_---~~~~~----._                ____  ______  ___
+  _,,_,*^____    ___``*g*\"*,      /    )/      \/   \
+ / __/ /'    ^. /     \ ^@q  f   (     / __    _\    )
+[  @f | @))   || @))   l 0 _/     \    (/ o)  ( o)   )
+ \`/   \~___ / _ \____/   \        \_  (_  )   \ )  /
+  |          _l_l_         I          \  /\_/    \)_/
+  }         [_____]        I           \/  //|  |\
+  ]           | | |        |               v |  | v
+  ]            ~ ~         |                 \__/
+  |                        |
+   |                       |
+BANNER
+printf '%s' "$RST" >&2
+printf '\n' >&2
+ohai "Installing ${BINARY} ${VERSION}"
+info "${BOLD}platform${RST}:  ${GREEN}${OS}/${ARCH}${RST}"
+info "${BOLD}install${RST}:   ${GREEN}${INSTALL_DIR}${RST}"
+printf '\n' >&2
 
 # Create temp dir with cleanup
 TMP_DIR=$(mktemp -d)
-trap "rm -rf '$TMP_DIR'" EXIT INT TERM
+trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
-# Download tarball and checksums
-log "Downloading ${TARBALL}..."
-curl -sfL -o "${TMP_DIR}/${TARBALL}" "${BASE_URL}/${TARBALL}" || fail "Download failed. Check that ${VERSION} exists for ${OS}/${ARCH}."
-curl -sfL -o "${TMP_DIR}/checksums.txt" "${BASE_URL}/checksums.txt" || fail "Could not download checksums"
+# Download
+info "downloading ${DIM}${TARBALL}${RST}..."
+curl -sfL -o "${TMP_DIR}/${TARBALL}" "${BASE_URL}/${TARBALL}" || fail "download failed — check that ${VERSION} exists for ${OS}/${ARCH}"
+curl -sfL -o "${TMP_DIR}/checksums.txt" "${BASE_URL}/checksums.txt" || fail "could not download checksums"
+ok "downloaded"
 
 # Verify checksum
-log "Verifying checksum..."
+info "verifying checksum..."
 EXPECTED=$(grep "${TARBALL}" "${TMP_DIR}/checksums.txt" | awk '{print $1}')
-[ -z "$EXPECTED" ] && fail "No checksum found for ${TARBALL}"
+[ -z "$EXPECTED" ] && fail "no checksum found for ${TARBALL}"
 
 if command -v sha256sum >/dev/null 2>&1; then
   ACTUAL=$(sha256sum "${TMP_DIR}/${TARBALL}" | awk '{print $1}')
@@ -65,29 +119,42 @@ elif command -v shasum >/dev/null 2>&1; then
 elif command -v openssl >/dev/null 2>&1; then
   ACTUAL=$(openssl dgst -sha256 "${TMP_DIR}/${TARBALL}" | awk '{print $NF}')
 else
-  fail "No SHA256 tool found (need sha256sum, shasum, or openssl)"
+  fail "no SHA256 tool found (need sha256sum, shasum, or openssl)"
 fi
 
 if [ "$EXPECTED" != "$ACTUAL" ]; then
-  printf 'ERROR: Checksum mismatch\n  expected: %s\n  actual:   %s\n' "$EXPECTED" "$ACTUAL" >&2
-  exit 1
+  fail "checksum mismatch — expected: ${EXPECTED}, actual: ${ACTUAL}"
 fi
+ok "checksum verified"
 
 # Extract
-log "Extracting..."
+info "extracting..."
 tar -xzf "${TMP_DIR}/${TARBALL}" -C "${TMP_DIR}"
+ok "extracted"
 
 # Install
 if [ -w "$INSTALL_DIR" ]; then
   mv "${TMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
 else
-  log "Writing to ${INSTALL_DIR} requires elevated permissions"
+  warn "writing to ${INSTALL_DIR} requires elevated permissions"
   sudo mv "${TMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
 fi
 chmod +x "${INSTALL_DIR}/${BINARY}"
 
-echo ""
-echo "Installed ${BINARY} ${VERSION} to ${INSTALL_DIR}/${BINARY}"
-echo ""
-echo "Quick start:"
-echo "  ${BINARY} --help"
+printf '\n' >&2
+ok "installed ${BOLD}${BINARY} ${VERSION}${RST} to ${GREEN}${INSTALL_DIR}/${BINARY}${RST}"
+printf '\n' >&2
+
+# --- offer to run setup ---
+
+if ask_yn "run the configuration wizard now?"; then
+  printf '\n' >&2
+  SETUP_SCRIPT="${TMP_DIR}/setup.sh"
+  curl -sfL "$SETUP_URL" -o "$SETUP_SCRIPT" || fail "could not download setup script"
+  GO_POSTGRES_MCP_NO_BANNER=1 sh "$SETUP_SCRIPT"
+else
+  ohai "Next steps"
+  info "  ${BOLD}${BINARY} --help${RST}"
+  info "  ${BOLD}curl -sfL ${SETUP_URL} | sh${RST}"
+  printf '\n' >&2
+fi

@@ -8,28 +8,52 @@ set -e
 
 CONFIG_FILE="${CONFIG_FILE:-config.yaml}"
 
-# --- helpers ---
+# --- colors (tty-aware) ---
 
-prompt() {
-  printf '%s' "$1" >&2
+if [ -t 2 ]; then
+  BOLD="$(tput bold 2>/dev/null || printf '')"
+  DIM="$(tput dim 2>/dev/null || printf '')"
+  RED="$(tput setaf 1 2>/dev/null || printf '')"
+  GREEN="$(tput setaf 2 2>/dev/null || printf '')"
+  YELLOW="$(tput setaf 3 2>/dev/null || printf '')"
+  BLUE="$(tput setaf 4 2>/dev/null || printf '')"
+  MAGENTA="$(tput setaf 5 2>/dev/null || printf '')"
+  RST="$(tput sgr0 2>/dev/null || printf '')"
+else
+  BOLD='' DIM='' RED='' GREEN='' YELLOW='' BLUE='' MAGENTA='' RST=''
+fi
+
+# --- message helpers ---
+
+ohai()      { printf '%s==>%s %s%s\n' "$BLUE" "$BOLD" "$*" "$RST" >&2; }
+info()      { printf '   %s\n' "$*" >&2; }
+ok()        { printf '   %s✓%s %s\n' "$GREEN" "$RST" "$*" >&2; }
+warn()      { printf '   %s!%s %s\n' "$YELLOW" "$RST" "$*" >&2; }
+fail()      { printf '   %sx%s %s\n' "$RED" "$RST" "$*" >&2; }
+
+# --- prompts ---
+
+ask() {
+  printf '   %s?%s %s ' "$MAGENTA" "$RST" "$1" >&2
   read -r val </dev/tty
   echo "$val"
 }
 
-prompt_default() {
-  printf '%s [%s] ' "$1" "$2" >&2
+ask_default() {
+  printf '   %s?%s %s %s[%s]%s ' "$MAGENTA" "$RST" "$1" "$DIM" "$2" "$RST" >&2
   read -r val </dev/tty
-  if [ -z "$val" ]; then echo "$2"; else echo "$val"; fi
+  val="${val:-$2}"
+  echo "$val"
 }
 
-prompt_yn() {
-  printf '%s [y/n] ' "$1" >&2
+ask_yn() {
+  printf '   %s?%s %s %s[y/n]%s ' "$MAGENTA" "$RST" "$1" "$BOLD" "$RST" >&2
   read -r val </dev/tty
   case "$val" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 
-prompt_secret() {
-  printf '%s' "$1" >&2
+ask_secret() {
+  printf '   %s?%s %s ' "$MAGENTA" "$RST" "$1" >&2
   stty -echo 2>/dev/null </dev/tty || true
   set +e
   read -r val </dev/tty
@@ -38,27 +62,26 @@ prompt_secret() {
   stty echo 2>/dev/null </dev/tty || true
   printf '\n' >&2
   [ "$_read_status" -ne 0 ] && return "$_read_status"
+  _label=$1
+  case "$_label" in *:) _label=${_label%:} ;; esac
+  ok "${_label}: ${DIM}(hidden)${RST}"
   echo "$val"
 }
 
-# collect_databases — prompts for database names, one per line (newline-delimited)
+# --- utility helpers ---
+
 collect_databases() {
-  echo "  enter database names, one per line. empty line to finish:" >&2
+  info "enter database names, one per line. empty line to finish:"
   _dbs=""
   while true; do
-    _v=$(prompt "  database: ")
+    _v=$(ask "database:")
     [ -z "$_v" ] && break
-    if [ -z "$_dbs" ]; then
-      _dbs="$_v"
-    else
-      _dbs="$_dbs
-$_v"
-    fi
+    if [ -z "$_dbs" ]; then _dbs="$_v"; else _dbs="${_dbs}
+${_v}"; fi
   done
   echo "$_dbs"
 }
 
-# validate_env_name — checks that a string is a valid env var name
 validate_env_name() {
   case "$1" in
     [a-zA-Z_]*) echo "$1" | grep -qE '^[a-zA-Z_][a-zA-Z0-9_]*$' ;;
@@ -66,108 +89,150 @@ validate_env_name() {
   esac
 }
 
-# escape_single_quotes — replaces ' with '\'' for safe shell quoting
 escape_single_quotes() {
   printf '%s' "$1" | sed "s/'/'\\\\''/g"
 }
 
-echo ""
-echo "go-postgres-mcp setup"
-echo "====================="
-echo ""
+escape_yaml_string() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# --- start ---
+
+if [ -z "$GO_POSTGRES_MCP_NO_BANNER" ]; then
+  printf '\n' >&2
+  printf '%s' "$BLUE" >&2
+  cat >&2 <<'BANNER'
+   .------------------------------------------------------.
+   | what time of day do users sign up most often?          |
+   '----.--------------------------------------------------'
+        |
+     ,_---~~~~~----._                ____  ______  ___
+  _,,_,*^____    ___``*g*\"*,      /    )/      \/   \
+ / __/ /'    ^. /     \ ^@q  f   (     / __    _\    )
+[  @f | @))   || @))   l 0 _/     \    (/ o)  ( o)   )
+ \`/   \~___ / _ \____/   \        \_  (_  )   \ )  /
+  |          _l_l_         I          \  /\_/    \)_/
+  }         [_____]        I           \/  //|  |\
+  ]           | | |        |               v |  | v
+  ]            ~ ~         |                 \__/
+  |                        |
+   |                       |
+BANNER
+  printf '%s' "$RST" >&2
+  printf '\n' >&2
+fi
+ohai "go-postgres-mcp setup"
+printf '\n' >&2
+
+CONFIG_FILE=$(ask_default "config file path" "${CONFIG_FILE}")
+ok "config file path: ${BOLD}${CONFIG_FILE}${RST}"
+printf '\n' >&2
 
 # --- read-only user check ---
 
-if ! prompt_yn "do you have a read-only postgresql user?"; then
-  echo ""
-  echo "  create one by running the following SQL as a superuser:"
-  echo ""
-  echo "    CREATE ROLE mcp_reader WITH LOGIN PASSWORD 'your-password';"
-  echo "    GRANT CONNECT ON DATABASE your_db TO mcp_reader;"
-  echo "    GRANT USAGE ON SCHEMA public TO mcp_reader;"
-  echo "    GRANT SELECT ON ALL TABLES IN SCHEMA public TO mcp_reader;"
-  echo "    ALTER DEFAULT PRIVILEGES IN SCHEMA public"
-  echo "      GRANT SELECT ON TABLES TO mcp_reader;"
-  echo ""
-  echo "  for multiple schemas, repeat the GRANT USAGE / GRANT SELECT"
-  echo "  lines for each schema."
-  echo ""
-  echo "  the ALTER DEFAULT PRIVILEGES line ensures future tables are"
-  echo "  also readable. adjust the schema and role name as needed."
-  echo ""
-  if ! prompt_yn "ready to continue?"; then
-    echo "  run this script again when ready." >&2
+if ! ask_yn "do you have a read-only postgresql user?"; then
+  printf '\n' >&2
+  info "create one by running the following SQL as a superuser:"
+  printf '\n' >&2
+  info "  ${BOLD}CREATE ROLE${RST} mcp_reader ${BOLD}WITH LOGIN PASSWORD${RST} 'your-password';"
+  info "  ${BOLD}GRANT CONNECT ON DATABASE${RST} your_db ${BOLD}TO${RST} mcp_reader;"
+  info "  ${BOLD}GRANT USAGE ON SCHEMA${RST} public ${BOLD}TO${RST} mcp_reader;"
+  info "  ${BOLD}GRANT SELECT ON ALL TABLES IN SCHEMA${RST} public ${BOLD}TO${RST} mcp_reader;"
+  info "  ${BOLD}ALTER DEFAULT PRIVILEGES IN SCHEMA${RST} public"
+  info "    ${BOLD}GRANT SELECT ON TABLES TO${RST} mcp_reader;"
+  printf '\n' >&2
+  info "for multiple schemas, repeat the GRANT USAGE / GRANT SELECT"
+  info "lines for each schema."
+  printf '\n' >&2
+  if ! ask_yn "ready to continue?"; then
+    fail "run this script again when ready."
     exit 0
   fi
-  echo ""
+  printf '\n' >&2
 fi
 
 # --- connection details ---
 
-DB_HOST=$(prompt_default "host" "localhost")
-DB_PORT=$(prompt_default "port" "5432")
-DB_USER=$(prompt "user: ")
-echo ""  >&2
-echo "  the password is read from an environment variable at runtime," >&2
-echo "  never stored in the config file." >&2
-echo "" >&2
+ohai "Connection"
+DB_HOST=$(ask_default "host" "localhost")
+ok "host: ${BOLD}${DB_HOST}${RST}"
+DB_PORT=$(ask_default "port" "5432")
+ok "port: ${BOLD}${DB_PORT}${RST}"
+DB_USER=$(ask "user:")
+ok "user: ${BOLD}${DB_USER}${RST}"
+DB_SSLMODE=$(ask_default "sslmode (disable/require/verify-full)" "require")
+ok "sslmode: ${BOLD}${DB_SSLMODE}${RST}"
+printf '\n' >&2
+
+# --- password environment variable ---
+
+ohai "Password"
+info "the password is read from an environment variable at runtime,"
+info "never stored in the config file."
+printf '\n' >&2
+
 while true; do
-  DB_PASSWORD_ENV=$(prompt_default "env var name for the password" "DB_PASSWORD")
+  DB_PASSWORD_ENV=$(ask_default "env var name" "DB_PASSWORD")
   if validate_env_name "$DB_PASSWORD_ENV"; then
+    ok "env var name: ${BOLD}${DB_PASSWORD_ENV}${RST}"
     break
   fi
-  echo "  invalid env var name — use letters, digits, and underscores only" >&2
+  warn "invalid name — use letters, digits, and underscores only"
 done
-DB_SSLMODE=$(prompt_default "sslmode (disable/require/verify-full)" "require")
-
-echo ""
-
-# --- set up environment variable ---
 
 DB_PASSWORD=""
 EXISTING_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
 
 if [ -n "$EXISTING_PASSWORD" ]; then
-  echo "  ${DB_PASSWORD_ENV} is already set in your environment." >&2
-  DB_PASSWORD="$EXISTING_PASSWORD"
-elif prompt_yn "set ${DB_PASSWORD_ENV} now?"; then
-  DB_PASSWORD=$(prompt_secret "  password: ")
-  SHELL_NAME=$(basename "${SHELL:-/bin/sh}")
-  case "$SHELL_NAME" in
-    zsh)  RC_FILE="$HOME/.zshrc" ;;
-    bash) RC_FILE="$HOME/.bashrc" ;;
-    *)    RC_FILE="" ;;
-  esac
-  ESCAPED_PASSWORD=$(escape_single_quotes "$DB_PASSWORD")
-  if [ -n "$RC_FILE" ] && prompt_yn "  append export to ${RC_FILE}?"; then
-    printf '\nexport %s='\''%s'\''\n' "$DB_PASSWORD_ENV" "$ESCAPED_PASSWORD" >> "$RC_FILE"
-    echo "  added to ${RC_FILE} — restart your shell or run: source ${RC_FILE}" >&2
-  else
-    export "${DB_PASSWORD_ENV}=${DB_PASSWORD}"
-    echo "  exported ${DB_PASSWORD_ENV} for this session" >&2
+  ok "${DB_PASSWORD_ENV} is already set in your environment"
+  if ask_yn "use the existing value?"; then
+    DB_PASSWORD="$EXISTING_PASSWORD"
+    ok "using existing ${BOLD}${DB_PASSWORD_ENV}${RST}"
   fi
-  echo ""
 fi
+
+if [ -z "$DB_PASSWORD" ]; then
+  if ask_yn "set ${DB_PASSWORD_ENV} now?"; then
+    DB_PASSWORD=$(ask_secret "password:")
+    SHELL_NAME=$(basename "${SHELL:-/bin/sh}")
+    case "$SHELL_NAME" in
+      zsh)  RC_FILE="$HOME/.zshrc" ;;
+      bash) RC_FILE="$HOME/.bashrc" ;;
+      *)    RC_FILE="" ;;
+    esac
+    ESCAPED_PASSWORD=$(escape_single_quotes "$DB_PASSWORD")
+    if [ -n "$RC_FILE" ] && ask_yn "append export to ${RC_FILE}?"; then
+      printf '\nexport %s='\''%s'\''\n' "$DB_PASSWORD_ENV" "$ESCAPED_PASSWORD" >> "$RC_FILE"
+      ok "added to ${BOLD}${RC_FILE}${RST} — restart your shell or: ${BOLD}source ${RC_FILE}${RST}"
+    else
+      info "to set in your current shell, run:"
+      info "  ${BOLD}export ${DB_PASSWORD_ENV}='${ESCAPED_PASSWORD}'${RST}"
+    fi
+  fi
+fi
+
+printf '\n' >&2
 
 # --- database discovery ---
 
+ohai "Databases"
+
 DATABASES=""
 
-if prompt_yn "discover all databases on this host?"; then
-  echo ""
+if ask_yn "discover all databases on this host?"; then
   if ! command -v psql >/dev/null 2>&1; then
-    echo "  psql not found — enter database names manually." >&2
-    echo "  (install postgresql-client to enable auto-discovery)" >&2
-    echo ""
+    warn "psql not found — enter database names manually"
+    info "(install postgresql-client to enable auto-discovery)"
+    printf '\n' >&2
     DATABASES=$(collect_databases)
   else
-    # use existing password or prompt for one
     if [ -n "$DB_PASSWORD" ]; then
       PASS="$DB_PASSWORD"
     else
-      PASS=$(prompt_secret "  password (for discovery, not stored): ")
+      PASS=$(ask_secret "password (for discovery, not stored):")
     fi
-    echo "  connecting to ${DB_HOST}:${DB_PORT}..." >&2
+    info "connecting to ${BOLD}${DB_HOST}:${DB_PORT}${RST}..."
     TMP_ERR=$(mktemp)
     DISCOVERED=$(PGPASSWORD="$PASS" psql \
       -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres \
@@ -176,9 +241,9 @@ if prompt_yn "discover all databases on this host?"; then
       2>"$TMP_ERR") || {
       ERR_MSG=$(cat "$TMP_ERR" 2>/dev/null)
       rm -f "$TMP_ERR"
-      echo "  connection failed: ${ERR_MSG}" >&2
-      echo "" >&2
-      echo "  enter database names manually instead." >&2
+      fail "connection failed: ${ERR_MSG}"
+      printf '\n' >&2
+      warn "enter database names manually instead"
       DATABASES=$(collect_databases)
       DISCOVERED=""
     }
@@ -186,40 +251,35 @@ if prompt_yn "discover all databases on this host?"; then
     PASS=""
     if [ -n "$DISCOVERED" ]; then
       DB_COUNT=$(echo "$DISCOVERED" | wc -l | tr -d ' ')
-      echo "  found ${DB_COUNT} databases:" >&2
+      ok "found ${BOLD}${DB_COUNT}${RST} databases:"
       echo "$DISCOVERED" | while IFS= read -r db; do
-        echo "    - ${db}" >&2
+        info "  ${GREEN}${db}${RST}"
       done
-      echo "" >&2
-      if prompt_yn "  use all ${DB_COUNT} databases?"; then
+      printf '\n' >&2
+      if ask_yn "use all ${DB_COUNT} databases?"; then
         DATABASES="$DISCOVERED"
+        ok "using all ${BOLD}${DB_COUNT}${RST} databases"
       else
         DATABASES=$(collect_databases)
       fi
     fi
   fi
 else
-  echo ""
+  printf '\n' >&2
   DATABASES=$(collect_databases)
 fi
 
 if [ -z "$(echo "$DATABASES" | tr -d '[:space:]')" ]; then
-  echo "  no databases specified. exiting." >&2
+  fail "no databases specified"
   exit 1
 fi
 
-echo ""
+printf '\n' >&2
 
 # --- per-database filtering ---
 
 CONF_DIR=$(mktemp -d)
-trap "rm -rf '$CONF_DIR'" EXIT INT TERM
-
-DB_COUNT=0
-echo "$DATABASES" | while IFS= read -r _d; do
-  [ -z "$_d" ] && continue
-  DB_COUNT=$((DB_COUNT + 1))
-done
+trap 'rm -rf "$CONF_DIR"' EXIT INT TERM
 
 DB_IDX=0
 echo "$DATABASES" | while IFS= read -r DB; do
@@ -228,27 +288,30 @@ echo "$DATABASES" | while IFS= read -r DB; do
   DB_SCHEMAS=""
   DB_TABLES=""
 
-  if prompt_yn "configure filters for ${DB}? (default: discover all)"; then
+  if ask_yn "configure filters for ${BOLD}${DB}${RST}? (default: discover all)"; then
     # Schema filter
-    if prompt_yn "  filter schemas for ${DB}?"; then
-      echo "    enter schema names, one per line. empty line to finish:" >&2
+    if ask_yn "filter schemas for ${DB}?"; then
+      info "enter schema names, one per line. empty line to finish:"
       while true; do
-        S=$(prompt "    schema: ")
+        S=$(ask "schema:")
         [ -z "$S" ] && break
         DB_SCHEMAS="${DB_SCHEMAS}
       - \"${S}\""
+        ok "schema: ${BOLD}${S}${RST}"
       done
     fi
 
     # Table filter
-    if prompt_yn "  filter tables for ${DB}?"; then
-      FILTER_MODE=$(prompt_default "    mode (include/exclude)" "include")
-      echo "    enter table names (schema.table), one per line. empty line to finish:" >&2
+    if ask_yn "filter tables for ${DB}?"; then
+      FILTER_MODE=$(ask_default "mode" "include")
+      ok "mode: ${BOLD}${FILTER_MODE}${RST}"
+      info "enter table names (schema.table), one per line. empty line to finish:"
       while true; do
-        T=$(prompt "    table: ")
+        T=$(ask "table:")
         [ -z "$T" ] && break
         DB_TABLES="${DB_TABLES}
         - \"${T}\""
+        ok "table: ${BOLD}${T}${RST}"
       done
       if [ -n "$DB_TABLES" ]; then
         DB_TABLES="
@@ -256,18 +319,41 @@ echo "$DATABASES" | while IFS= read -r DB; do
       ${FILTER_MODE}:${DB_TABLES}"
       fi
     fi
+  else
+    ok "${DB}: ${DIM}discover all${RST}"
   fi
 
-  # write per-db fragment using numeric index to avoid path traversal
   printf '%s' "${DB_SCHEMAS}" > "${CONF_DIR}/${DB_IDX}.schemas"
   printf '%s' "${DB_TABLES}" > "${CONF_DIR}/${DB_IDX}.tables"
 done
 
-echo ""
+printf '\n' >&2
 
 # --- knowledge map ---
 
-KM_PATH=$(prompt_default "knowledgemap path" "knowledgemap.db")
+ohai "Storage"
+KM_PATH=$(ask_default "knowledgemap path" "knowledgemap.db")
+ok "knowledgemap path: ${BOLD}${KM_PATH}${RST}"
+
+printf '\n' >&2
+
+# --- summary ---
+
+ohai "Summary"
+info "${BOLD}host${RST}:         ${GREEN}${DB_HOST}${RST}"
+info "${BOLD}port${RST}:         ${GREEN}${DB_PORT}${RST}"
+info "${BOLD}user${RST}:         ${GREEN}${DB_USER}${RST}"
+info "${BOLD}sslmode${RST}:      ${GREEN}${DB_SSLMODE}${RST}"
+info "${BOLD}password env${RST}: ${GREEN}${DB_PASSWORD_ENV}${RST}"
+info "${BOLD}databases${RST}:"
+echo "$DATABASES" | while IFS= read -r _db; do
+  [ -z "$_db" ] && continue
+  info "  ${GREEN}${_db}${RST}"
+done
+info "${BOLD}knowledgemap${RST}: ${GREEN}${KM_PATH}${RST}"
+info "${BOLD}config file${RST}:  ${GREEN}${CONFIG_FILE}${RST}"
+
+printf '\n' >&2
 
 # --- write config ---
 
@@ -279,11 +365,12 @@ KM_PATH=$(prompt_default "knowledgemap path" "knowledgemap.db")
     DB_IDX=$((DB_IDX + 1))
     DB_SCHEMAS=$(cat "${CONF_DIR}/${DB_IDX}.schemas" 2>/dev/null || true)
     DB_TABLES=$(cat "${CONF_DIR}/${DB_IDX}.tables" 2>/dev/null || true)
+    SAFE_DB=$(escape_yaml_string "$DB")
     cat << ENTRY
-  - name: "${DB}"
+  - name: "${SAFE_DB}"
     host: "${DB_HOST}"
     port: ${DB_PORT}
-    database: "${DB}"
+    database: "${SAFE_DB}"
     user: "${DB_USER}"
     password_env: "${DB_PASSWORD_ENV}"
     sslmode: "${DB_SSLMODE}"${DB_SCHEMAS:+
@@ -298,12 +385,14 @@ knowledgemap:
 FOOTER
 } > "$CONFIG_FILE"
 
-echo ""
-echo "wrote ${CONFIG_FILE}"
-echo ""
-echo "next steps:"
+printf '\n' >&2
+ok "wrote ${BOLD}${CONFIG_FILE}${RST}"
+printf '\n' >&2
+
+ohai "Next steps"
 CURRENT_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
 if [ -z "$CURRENT_PASSWORD" ]; then
-  echo "  export ${DB_PASSWORD_ENV}='your-password'"
+  info "  ${BOLD}export ${DB_PASSWORD_ENV}='your-password'${RST}"
 fi
-echo "  go-postgres-mcp --config ${CONFIG_FILE}"
+info "  ${BOLD}go-postgres-mcp --config ${CONFIG_FILE}${RST}"
+printf '\n' >&2

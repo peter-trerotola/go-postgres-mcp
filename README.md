@@ -6,6 +6,24 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/peter-trerotola/go-postgres-mcp.svg)](https://pkg.go.dev/github.com/peter-trerotola/go-postgres-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+```
+   .------------------------------------------------------.
+   | what time of day do users sign up most often?          |
+   '----.--------------------------------------------------'
+        |
+     ,_---~~~~~----._                ____  ______  ___
+  _,,_,*^____    ___``*g*\"*,      /    )/      \/   \
+ / __/ /'    ^. /     \ ^@q  f   (     / __    _\    )
+[  @f | @))   || @))   l 0 _/     \    (/ o)  ( o)   )
+ \`/   \~___ / _ \____/   \        \_  (_  )   \ )  /
+  |          _l_l_         I          \  /\_/    \)_/
+  }         [_____]        I           \/  //|  |\
+  ]           | | |        |               v |  | v
+  ]            ~ ~         |                 \__/
+  |                        |
+   |                       |
+```
+
 A Go-based [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that provides **read-only** access to PostgreSQL databases. Designed for use with Claude Desktop, Claude Code, and other MCP-compatible clients.
 
 ## Features
