@@ -224,9 +224,12 @@
   <script>
     function copy(id) {
       const el = document.getElementById(id);
-      const text = el.textContent.replace('Copy', '').trim();
+      const btn = el.querySelector('.copy-btn');
+      const clone = el.cloneNode(true);
+      const cloneBtn = clone.querySelector('.copy-btn');
+      if (cloneBtn) cloneBtn.remove();
+      const text = clone.textContent.trim();
       navigator.clipboard.writeText(text).then(() => {
-        const btn = el.querySelector('.copy-btn');
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy', 1500);
       });

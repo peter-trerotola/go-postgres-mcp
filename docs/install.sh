@@ -12,7 +12,7 @@ REPO="peter-trerotola/go-postgres-mcp"
 BINARY="go-postgres-mcp"
 
 log() { echo "  $1"; }
-fail() { echo "ERROR: $1" >&2; exit 1; }
+fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 
 # Detect OS
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -68,7 +68,10 @@ else
   fail "No SHA256 tool found (need sha256sum, shasum, or openssl)"
 fi
 
-[ "$EXPECTED" = "$ACTUAL" ] || fail "Checksum mismatch:\n  expected: ${EXPECTED}\n  actual:   ${ACTUAL}"
+if [ "$EXPECTED" != "$ACTUAL" ]; then
+  printf 'ERROR: Checksum mismatch\n  expected: %s\n  actual:   %s\n' "$EXPECTED" "$ACTUAL" >&2
+  exit 1
+fi
 
 # Extract
 log "Extracting..."
