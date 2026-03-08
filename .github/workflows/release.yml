@@ -31,7 +31,8 @@ jobs:
           TAG: ${{ steps.release.outputs.tag_name }}
 
       # release-please creates/updates PRs via GITHUB_TOKEN, which doesn't
-      # trigger pull_request events. Close and reopen to trigger CI.
+      # trigger pull_request events for CI. Trigger CI via workflow_dispatch
+      # on the PR branch (workflow_dispatch is exempt from this restriction).
       - name: Trigger CI on release PR
         if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
         env:
@@ -39,8 +40,8 @@ jobs:
           PR_NUMBER: ${{ steps.release.outputs.pr }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh pr close "$PR_NUMBER" --repo "$GH_REPO"
-          gh pr reopen "$PR_NUMBER" --repo "$GH_REPO"
+          BRANCH=$(gh pr view "$PR_NUMBER" --json headRefName --jq '.headRefName' --repo "$GH_REPO")
+          gh workflow run ci.yml --ref "$BRANCH" --repo "$GH_REPO"
 
   test:
     runs-on: ubuntu-latest
