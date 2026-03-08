@@ -3,10 +3,6 @@ name: Release
 on:
   push:
     branches: [master, main]
-  # Cron ensures release-please runs even when auto-merge (GITHUB_TOKEN)
-  # suppresses push/pull_request events that would normally trigger this.
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
