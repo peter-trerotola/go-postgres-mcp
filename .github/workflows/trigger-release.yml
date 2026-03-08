@@ -1,0 +1,17 @@
+name: Trigger Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master, main]
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - name: Trigger release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run release.yml --repo "$GH_REPO"
