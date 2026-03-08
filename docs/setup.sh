@@ -94,9 +94,10 @@ escape_single_quotes() {
 
 # --- start ---
 
-printf '\n' >&2
-printf "${BLUE}" >&2
-cat >&2 <<'BANNER'
+if [ -z "$GO_POSTGRES_MCP_NO_BANNER" ]; then
+  printf '\n' >&2
+  printf "${BLUE}" >&2
+  cat >&2 <<'BANNER'
    .------------------------------------------------------.
    | what time of day do users sign up most often?          |
    '----.--------------------------------------------------'
@@ -113,8 +114,9 @@ cat >&2 <<'BANNER'
   |                        |
    |                       |
 BANNER
-printf "${RST}" >&2
-printf '\n' >&2
+  printf "${RST}" >&2
+  printf '\n' >&2
+fi
 ohai "go-postgres-mcp setup"
 printf '\n' >&2
 

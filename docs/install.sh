@@ -149,7 +149,7 @@ printf '\n' >&2
 
 if ask_yn "run the configuration wizard now?"; then
   printf '\n' >&2
-  curl -sfL "$SETUP_URL" | sh
+  curl -sfL "$SETUP_URL" | GO_POSTGRES_MCP_NO_BANNER=1 sh
 else
   ohai "Next steps"
   info "  ${BOLD}${BINARY} --help${RST}"
