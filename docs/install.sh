@@ -16,7 +16,7 @@ SETUP_URL="https://peter-trerotola.github.io/go-postgres-mcp/setup.sh"
 
 if [ -t 2 ]; then
   BOLD="$(tput bold 2>/dev/null || printf '')"
-  DIM="$(tput setaf 0 2>/dev/null || printf '')"
+  DIM="$(tput dim 2>/dev/null || printf '')"
   RED="$(tput setaf 1 2>/dev/null || printf '')"
   GREEN="$(tput setaf 2 2>/dev/null || printf '')"
   YELLOW="$(tput setaf 3 2>/dev/null || printf '')"
@@ -29,14 +29,14 @@ fi
 
 # --- message helpers ---
 
-ohai()      { printf "${BLUE}==>${BOLD} %s${RST}\n" "$*" >&2; }
-info()      { printf "   %s\n" "$*" >&2; }
-ok()        { printf "   ${GREEN}✓${RST} %s\n" "$*" >&2; }
-warn()      { printf "   ${YELLOW}!${RST} %s\n" "$*" >&2; }
-fail()      { printf "   ${RED}x${RST} %s\n" "$*" >&2; exit 1; }
+ohai()      { printf '%s==>%s %s%s\n' "$BLUE" "$BOLD" "$*" "$RST" >&2; }
+info()      { printf '   %s\n' "$*" >&2; }
+ok()        { printf '   %s✓%s %s\n' "$GREEN" "$RST" "$*" >&2; }
+warn()      { printf '   %s!%s %s\n' "$YELLOW" "$RST" "$*" >&2; }
+fail()      { printf '   %sx%s %s\n' "$RED" "$RST" "$*" >&2; exit 1; }
 
 ask_yn() {
-  printf "   ${MAGENTA}?${RST} %s ${BOLD}[y/n]${RST} " "$1" >&2
+  printf '   %s?%s %s %s[y/n]%s ' "$MAGENTA" "$RST" "$1" "$BOLD" "$RST" >&2
   read -r val </dev/tty
   case "$val" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
@@ -72,7 +72,7 @@ BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
 # --- install ---
 
 printf '\n' >&2
-printf "${BLUE}" >&2
+printf '%s' "$BLUE" >&2
 cat >&2 <<'BANNER'
    .------------------------------------------------------.
    | what time of day do users sign up most often?          |
@@ -90,7 +90,7 @@ cat >&2 <<'BANNER'
   |                        |
    |                       |
 BANNER
-printf "${RST}" >&2
+printf '%s' "$RST" >&2
 printf '\n' >&2
 ohai "Installing ${BINARY} ${VERSION}"
 info "${BOLD}platform${RST}:  ${GREEN}${OS}/${ARCH}${RST}"
@@ -99,7 +99,7 @@ printf '\n' >&2
 
 # Create temp dir with cleanup
 TMP_DIR=$(mktemp -d)
-trap "rm -rf '$TMP_DIR'" EXIT INT TERM
+trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
 # Download
 info "downloading ${DIM}${TARBALL}${RST}..."
@@ -149,7 +149,9 @@ printf '\n' >&2
 
 if ask_yn "run the configuration wizard now?"; then
   printf '\n' >&2
-  curl -sfL "$SETUP_URL" | GO_POSTGRES_MCP_NO_BANNER=1 sh
+  SETUP_SCRIPT="${TMP_DIR}/setup.sh"
+  curl -sfL "$SETUP_URL" -o "$SETUP_SCRIPT" || fail "could not download setup script"
+  GO_POSTGRES_MCP_NO_BANNER=1 sh "$SETUP_SCRIPT"
 else
   ohai "Next steps"
   info "  ${BOLD}${BINARY} --help${RST}"

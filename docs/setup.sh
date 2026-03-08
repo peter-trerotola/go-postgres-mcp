@@ -12,7 +12,7 @@ CONFIG_FILE="${CONFIG_FILE:-config.yaml}"
 
 if [ -t 2 ]; then
   BOLD="$(tput bold 2>/dev/null || printf '')"
-  DIM="$(tput setaf 0 2>/dev/null || printf '')"
+  DIM="$(tput dim 2>/dev/null || printf '')"
   RED="$(tput setaf 1 2>/dev/null || printf '')"
   GREEN="$(tput setaf 2 2>/dev/null || printf '')"
   YELLOW="$(tput setaf 3 2>/dev/null || printf '')"
@@ -25,36 +25,35 @@ fi
 
 # --- message helpers ---
 
-ohai()      { printf "${BLUE}==>${BOLD} %s${RST}\n" "$*" >&2; }
-info()      { printf "   %s\n" "$*" >&2; }
-ok()        { printf "   ${GREEN}✓${RST} %s\n" "$*" >&2; }
-warn()      { printf "   ${YELLOW}!${RST} %s\n" "$*" >&2; }
-fail()      { printf "   ${RED}x${RST} %s\n" "$*" >&2; }
+ohai()      { printf '%s==>%s %s%s\n' "$BLUE" "$BOLD" "$*" "$RST" >&2; }
+info()      { printf '   %s\n' "$*" >&2; }
+ok()        { printf '   %s✓%s %s\n' "$GREEN" "$RST" "$*" >&2; }
+warn()      { printf '   %s!%s %s\n' "$YELLOW" "$RST" "$*" >&2; }
+fail()      { printf '   %sx%s %s\n' "$RED" "$RST" "$*" >&2; }
 
 # --- prompts ---
 
 ask() {
-  printf "   ${MAGENTA}?${RST} %s " "$1" >&2
+  printf '   %s?%s %s ' "$MAGENTA" "$RST" "$1" >&2
   read -r val </dev/tty
   echo "$val"
 }
 
 ask_default() {
-  printf "   ${MAGENTA}?${RST} %s ${DIM}[%s]${RST} " "$1" "$2" >&2
+  printf '   %s?%s %s %s[%s]%s ' "$MAGENTA" "$RST" "$1" "$DIM" "$2" "$RST" >&2
   read -r val </dev/tty
   val="${val:-$2}"
-  ok "${1}: ${BOLD}${val}${RST}"
   echo "$val"
 }
 
 ask_yn() {
-  printf "   ${MAGENTA}?${RST} %s ${BOLD}[y/n]${RST} " "$1" >&2
+  printf '   %s?%s %s %s[y/n]%s ' "$MAGENTA" "$RST" "$1" "$BOLD" "$RST" >&2
   read -r val </dev/tty
   case "$val" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 
 ask_secret() {
-  printf "   ${MAGENTA}?${RST} %s " "$1" >&2
+  printf '   %s?%s %s ' "$MAGENTA" "$RST" "$1" >&2
   stty -echo 2>/dev/null </dev/tty || true
   set +e
   read -r val </dev/tty
@@ -63,7 +62,9 @@ ask_secret() {
   stty echo 2>/dev/null </dev/tty || true
   printf '\n' >&2
   [ "$_read_status" -ne 0 ] && return "$_read_status"
-  ok "${1}: ${DIM}(hidden)${RST}"
+  _label=$1
+  case "$_label" in *:) _label=${_label%:} ;; esac
+  ok "${_label}: ${DIM}(hidden)${RST}"
   echo "$val"
 }
 
@@ -92,11 +93,15 @@ escape_single_quotes() {
   printf '%s' "$1" | sed "s/'/'\\\\''/g"
 }
 
+escape_yaml_string() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
 # --- start ---
 
 if [ -z "$GO_POSTGRES_MCP_NO_BANNER" ]; then
   printf '\n' >&2
-  printf "${BLUE}" >&2
+  printf '%s' "$BLUE" >&2
   cat >&2 <<'BANNER'
    .------------------------------------------------------.
    | what time of day do users sign up most often?          |
@@ -114,13 +119,14 @@ if [ -z "$GO_POSTGRES_MCP_NO_BANNER" ]; then
   |                        |
    |                       |
 BANNER
-  printf "${RST}" >&2
+  printf '%s' "$RST" >&2
   printf '\n' >&2
 fi
 ohai "go-postgres-mcp setup"
 printf '\n' >&2
 
 CONFIG_FILE=$(ask_default "config file path" "${CONFIG_FILE}")
+ok "config file path: ${BOLD}${CONFIG_FILE}${RST}"
 printf '\n' >&2
 
 # --- read-only user check ---
@@ -150,10 +156,13 @@ fi
 
 ohai "Connection"
 DB_HOST=$(ask_default "host" "localhost")
+ok "host: ${BOLD}${DB_HOST}${RST}"
 DB_PORT=$(ask_default "port" "5432")
+ok "port: ${BOLD}${DB_PORT}${RST}"
 DB_USER=$(ask "user:")
 ok "user: ${BOLD}${DB_USER}${RST}"
-DB_SSLMODE=$(ask_default "sslmode" "require")
+DB_SSLMODE=$(ask_default "sslmode (disable/require/verify-full)" "require")
+ok "sslmode: ${BOLD}${DB_SSLMODE}${RST}"
 printf '\n' >&2
 
 # --- password environment variable ---
@@ -166,6 +175,7 @@ printf '\n' >&2
 while true; do
   DB_PASSWORD_ENV=$(ask_default "env var name" "DB_PASSWORD")
   if validate_env_name "$DB_PASSWORD_ENV"; then
+    ok "env var name: ${BOLD}${DB_PASSWORD_ENV}${RST}"
     break
   fi
   warn "invalid name — use letters, digits, and underscores only"
@@ -196,8 +206,8 @@ if [ -z "$DB_PASSWORD" ]; then
       printf '\nexport %s='\''%s'\''\n' "$DB_PASSWORD_ENV" "$ESCAPED_PASSWORD" >> "$RC_FILE"
       ok "added to ${BOLD}${RC_FILE}${RST} — restart your shell or: ${BOLD}source ${RC_FILE}${RST}"
     else
-      export "${DB_PASSWORD_ENV}=${DB_PASSWORD}"
-      ok "exported ${BOLD}${DB_PASSWORD_ENV}${RST} for this session"
+      info "to set in your current shell, run:"
+      info "  ${BOLD}export ${DB_PASSWORD_ENV}='${ESCAPED_PASSWORD}'${RST}"
     fi
   fi
 fi
@@ -269,7 +279,7 @@ printf '\n' >&2
 # --- per-database filtering ---
 
 CONF_DIR=$(mktemp -d)
-trap "rm -rf '$CONF_DIR'" EXIT INT TERM
+trap 'rm -rf "$CONF_DIR"' EXIT INT TERM
 
 DB_IDX=0
 echo "$DATABASES" | while IFS= read -r DB; do
@@ -294,6 +304,7 @@ echo "$DATABASES" | while IFS= read -r DB; do
     # Table filter
     if ask_yn "filter tables for ${DB}?"; then
       FILTER_MODE=$(ask_default "mode" "include")
+      ok "mode: ${BOLD}${FILTER_MODE}${RST}"
       info "enter table names (schema.table), one per line. empty line to finish:"
       while true; do
         T=$(ask "table:")
@@ -322,6 +333,7 @@ printf '\n' >&2
 
 ohai "Storage"
 KM_PATH=$(ask_default "knowledgemap path" "knowledgemap.db")
+ok "knowledgemap path: ${BOLD}${KM_PATH}${RST}"
 
 printf '\n' >&2
 
@@ -353,11 +365,12 @@ printf '\n' >&2
     DB_IDX=$((DB_IDX + 1))
     DB_SCHEMAS=$(cat "${CONF_DIR}/${DB_IDX}.schemas" 2>/dev/null || true)
     DB_TABLES=$(cat "${CONF_DIR}/${DB_IDX}.tables" 2>/dev/null || true)
+    SAFE_DB=$(escape_yaml_string "$DB")
     cat << ENTRY
-  - name: "${DB}"
+  - name: "${SAFE_DB}"
     host: "${DB_HOST}"
     port: ${DB_PORT}
-    database: "${DB}"
+    database: "${SAFE_DB}"
     user: "${DB_USER}"
     password_env: "${DB_PASSWORD_ENV}"
     sslmode: "${DB_SSLMODE}"${DB_SCHEMAS:+
