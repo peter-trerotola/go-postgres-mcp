@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.6.1...v1.6.2) (2026-03-08)
+
+
+### Bug Fixes
+
+* apply gofmt -s and add Go Report Card badge to site ([#56](https://github.com/peter-trerotola/go-postgres-mcp/issues/56)) ([a1a85fd](https://github.com/peter-trerotola/go-postgres-mcp/commit/a1a85fd8058b1e3c046ef7ee26e8f07ec30e98ad))
+
 ## [1.6.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.6.0...v1.6.1) (2026-03-08)
 
 
