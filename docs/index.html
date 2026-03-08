@@ -6,173 +6,192 @@
   <title>go-postgres-mcp</title>
   <meta name="description" content="Read-only PostgreSQL MCP server with schema intelligence">
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --text-muted: #8b949e;
-      --accent: #58a6ff;
-      --green: #3fb950;
-      --code-bg: #1c2129;
+      --bg: #0a0a0a;
+      --text: #b0b0b0;
+      --bright: #e0e0e0;
+      --dim: #505050;
+      --green: #4af626;
+      --cyan: #00d4aa;
+      --yellow: #d4a017;
+      --border: #252525;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
+      font-size: 14px;
+      line-height: 1.7;
     }
 
     .container {
-      max-width: 720px;
+      max-width: 680px;
       margin: 0 auto;
       padding: 0 24px;
     }
 
     header {
-      padding: 80px 0 48px;
-      text-align: center;
+      padding: 64px 0 40px;
+    }
+
+    .prompt::before {
+      content: '$ ';
+      color: var(--green);
     }
 
     h1 {
-      font-size: 2.5rem;
+      font-size: 1.4rem;
       font-weight: 700;
-      letter-spacing: -0.02em;
+      color: var(--bright);
+      margin-bottom: 4px;
     }
 
     .tagline {
-      color: var(--text-muted);
-      font-size: 1.15rem;
-      margin-top: 12px;
+      color: var(--dim);
     }
 
     .badges {
-      margin-top: 20px;
+      margin-top: 16px;
       display: flex;
-      gap: 8px;
-      justify-content: center;
+      gap: 6px;
       flex-wrap: wrap;
     }
 
-    .install-section {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 32px;
-      margin: 32px 0;
+    .section {
+      border-top: 1px solid var(--border);
+      padding: 24px 0;
     }
 
-    .install-section h2 {
-      font-size: 1.1rem;
-      margin-bottom: 16px;
-      color: var(--text-muted);
+    .section-label {
+      color: var(--dim);
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-weight: 600;
-    }
-
-    .code-block {
-      position: relative;
-      background: var(--code-bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 16px 48px 16px 16px;
-      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-      font-size: 0.9rem;
-      overflow-x: auto;
-      white-space: pre;
-      color: var(--green);
+      letter-spacing: 0.15em;
       margin-bottom: 12px;
     }
 
-    .code-block:last-child { margin-bottom: 0; }
+    .cmd {
+      position: relative;
+      padding: 12px 40px 12px 16px;
+      background: #111;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+      white-space: pre;
+      overflow-x: auto;
+      color: var(--green);
+    }
+
+    .cmd::before {
+      content: '> ';
+      color: var(--dim);
+    }
+
+    .cmd:last-of-type { margin-bottom: 0; }
 
     .copy-btn {
       position: absolute;
-      top: 8px;
+      top: 10px;
       right: 8px;
-      background: var(--border);
-      border: none;
-      color: var(--text-muted);
-      padding: 4px 8px;
-      border-radius: 4px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 2px 6px;
       cursor: pointer;
-      font-size: 0.75rem;
       font-family: inherit;
+      font-size: 11px;
     }
 
-    .copy-btn:hover { color: var(--text); background: #484f58; }
+    .copy-btn:hover { color: var(--text); border-color: var(--dim); }
 
-    .or-divider {
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      margin: 12px 0;
+    .alt-label {
+      color: var(--dim);
+      font-size: 12px;
+      margin: 4px 0;
+      padding-left: 16px;
+    }
+
+    .platform-note {
+      color: var(--dim);
+      font-size: 12px;
+      margin-top: 12px;
     }
 
     .features {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin: 40px 0;
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
     }
 
     .feature {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 20px;
+      background: var(--bg);
+      padding: 16px;
     }
 
     .feature h3 {
-      font-size: 0.95rem;
-      margin-bottom: 6px;
+      color: var(--cyan);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .feature h3::before {
+      content: '# ';
+      color: var(--dim);
     }
 
     .feature p {
-      color: var(--text-muted);
-      font-size: 0.85rem;
+      color: var(--dim);
+      font-size: 12px;
       line-height: 1.5;
     }
 
     .links {
-      text-align: center;
-      padding: 48px 0;
-      color: var(--text-muted);
-      font-size: 0.9rem;
+      padding: 32px 0;
+      border-top: 1px solid var(--border);
+      color: var(--dim);
+      font-size: 13px;
     }
 
     .links a {
-      color: var(--accent);
+      color: var(--text);
       text-decoration: none;
     }
 
-    .links a:hover { text-decoration: underline; }
+    .links a:hover { color: var(--bright); text-decoration: underline; }
 
-    .links span { margin: 0 12px; }
+    .links span { margin: 0 8px; color: var(--border); }
 
-    .platform-note {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      margin-top: 8px;
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background: var(--green);
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
     }
 
     @media (max-width: 600px) {
-      header { padding: 48px 0 32px; }
-      h1 { font-size: 1.8rem; }
+      header { padding: 40px 0 24px; }
       .features { grid-template-columns: 1fr; }
-      .install-section { padding: 20px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>go-postgres-mcp</h1>
-      <p class="tagline">Read-only PostgreSQL MCP server with schema intelligence</p>
+      <h1 class="prompt">go-postgres-mcp</h1>
+      <p class="tagline">read-only postgresql mcp server with schema intelligence</p>
       <div class="badges">
         <a href="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/ci.yml"><img src="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
         <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases"><img src="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/release.yml/badge.svg" alt="Release"></a>
@@ -182,43 +201,48 @@
       </div>
     </header>
 
-    <div class="install-section">
-      <h2>Install</h2>
-      <div class="code-block" id="curl-cmd">curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/install.sh | sh<button class="copy-btn" onclick="copy('curl-cmd')">Copy</button></div>
-      <div class="or-divider">or</div>
-      <div class="code-block" id="go-cmd">go install github.com/peter-trerotola/go-postgres-mcp/cmd@latest<button class="copy-btn" onclick="copy('go-cmd')">Copy</button></div>
-      <div class="or-divider">or</div>
-      <div class="code-block" id="docker-cmd">docker pull ghcr.io/peter-trerotola/go-postgres-mcp:latest<button class="copy-btn" onclick="copy('docker-cmd')">Copy</button></div>
-      <p class="platform-note">Supports Linux and macOS on amd64 and arm64.</p>
+    <div class="section">
+      <div class="section-label">install</div>
+      <div class="cmd" id="curl-cmd">curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/install.sh | sh<button class="copy-btn" onclick="copy('curl-cmd')">cp</button></div>
+      <p class="alt-label">or</p>
+      <div class="cmd" id="go-cmd">go install github.com/peter-trerotola/go-postgres-mcp/cmd@latest<button class="copy-btn" onclick="copy('go-cmd')">cp</button></div>
+      <p class="alt-label">or</p>
+      <div class="cmd" id="docker-cmd">docker pull ghcr.io/peter-trerotola/go-postgres-mcp:latest<button class="copy-btn" onclick="copy('docker-cmd')">cp</button></div>
+      <p class="platform-note">linux/darwin &middot; amd64/arm64</p>
     </div>
 
-    <div class="features">
-      <div class="feature">
-        <h3>9 MCP Tools</h3>
-        <p>Query, explore schemas, search tables, and discover database structure through natural language.</p>
-      </div>
-      <div class="feature">
-        <h3>Read-Only by Design</h3>
-        <p>4 layers of protection: AST parsing, read-only connections, read-only transactions, and PostgreSQL grants.</p>
-      </div>
-      <div class="feature">
-        <h3>Schema Intelligence</h3>
-        <p>Auto-discovers schemas with SQLite-backed FTS5 knowledge map. Injects schema context into query responses.</p>
-      </div>
-      <div class="feature">
-        <h3>Works Everywhere</h3>
-        <p>Claude Desktop, Claude Code, Cursor, and any MCP-compatible client. Runs as a stdio server.</p>
+    <div class="section">
+      <div class="section-label">features</div>
+      <div class="features">
+        <div class="feature">
+          <h3>9 mcp tools</h3>
+          <p>query, explore schemas, search tables, discover database structure</p>
+        </div>
+        <div class="feature">
+          <h3>read-only</h3>
+          <p>4 layers: ast parsing, ro connections, ro transactions, pg grants</p>
+        </div>
+        <div class="feature">
+          <h3>schema intelligence</h3>
+          <p>auto-discovery with sqlite fts5 knowledge map, schema context injection</p>
+        </div>
+        <div class="feature">
+          <h3>works everywhere</h3>
+          <p>claude desktop, claude code, cursor, any mcp client. stdio transport</p>
+        </div>
       </div>
     </div>
 
     <div class="links">
-      <a href="https://github.com/peter-trerotola/go-postgres-mcp">GitHub</a>
-      <span>&middot;</span>
-      <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases">Releases</a>
-      <span>&middot;</span>
-      <a href="https://github.com/peter-trerotola/go-postgres-mcp#configuration">Docs</a>
-      <span>&middot;</span>
-      <a href="https://github.com/peter-trerotola/go-postgres-mcp/issues">Issues</a>
+      <a href="https://github.com/peter-trerotola/go-postgres-mcp">github</a>
+      <span>|</span>
+      <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases">releases</a>
+      <span>|</span>
+      <a href="https://github.com/peter-trerotola/go-postgres-mcp#configuration">docs</a>
+      <span>|</span>
+      <a href="https://github.com/peter-trerotola/go-postgres-mcp/issues">issues</a>
+      <span>&nbsp;</span>
+      <span class="cursor"></span>
     </div>
   </div>
 
@@ -229,10 +253,10 @@
       const clone = el.cloneNode(true);
       const cloneBtn = clone.querySelector('.copy-btn');
       if (cloneBtn) cloneBtn.remove();
-      const text = clone.textContent.trim();
+      const text = clone.textContent.replace(/^> /, '').trim();
       navigator.clipboard.writeText(text).then(() => {
-        btn.textContent = 'Copied!';
-        setTimeout(() => btn.textContent = 'Copy', 1500);
+        btn.textContent = 'ok';
+        setTimeout(() => btn.textContent = 'cp', 1500);
       });
     }
   </script>
