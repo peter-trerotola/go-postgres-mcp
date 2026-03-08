@@ -31,21 +31,44 @@ prompt_yn() {
 prompt_secret() {
   printf '%s' "$1" >&2
   stty -echo 2>/dev/null </dev/tty || true
+  set +e
   read -r val </dev/tty
+  _read_status=$?
+  set -e
   stty echo 2>/dev/null </dev/tty || true
   printf '\n' >&2
+  [ "$_read_status" -ne 0 ] && return "$_read_status"
   echo "$val"
 }
 
-# collect_list "prompt" — reads lines until empty, returns space-separated
-collect_list() {
-  _items=""
+# collect_databases — prompts for database names, one per line (newline-delimited)
+collect_databases() {
+  echo "  enter database names, one per line. empty line to finish:" >&2
+  _dbs=""
   while true; do
-    _v=$(prompt "$1")
+    _v=$(prompt "  database: ")
     [ -z "$_v" ] && break
-    _items="${_items} ${_v}"
+    if [ -z "$_dbs" ]; then
+      _dbs="$_v"
+    else
+      _dbs="$_dbs
+$_v"
+    fi
   done
-  echo "$_items"
+  echo "$_dbs"
+}
+
+# validate_env_name — checks that a string is a valid env var name
+validate_env_name() {
+  case "$1" in
+    [a-zA-Z_]*) echo "$1" | grep -qE '^[a-zA-Z_][a-zA-Z0-9_]*$' ;;
+    *) return 1 ;;
+  esac
+}
+
+# escape_single_quotes — replaces ' with '\'' for safe shell quoting
+escape_single_quotes() {
+  printf '%s' "$1" | sed "s/'/'\\\\''/g"
 }
 
 echo ""
@@ -88,14 +111,26 @@ echo ""  >&2
 echo "  the password is read from an environment variable at runtime," >&2
 echo "  never stored in the config file." >&2
 echo "" >&2
-DB_PASSWORD_ENV=$(prompt_default "env var name for the password" "DB_PASSWORD")
-DB_SSLMODE=$(prompt_default "sslmode (disable/require/verify-full)" "disable")
+while true; do
+  DB_PASSWORD_ENV=$(prompt_default "env var name for the password" "DB_PASSWORD")
+  if validate_env_name "$DB_PASSWORD_ENV"; then
+    break
+  fi
+  echo "  invalid env var name — use letters, digits, and underscores only" >&2
+done
+DB_SSLMODE=$(prompt_default "sslmode (disable/require/verify-full)" "require")
 
 echo ""
 
 # --- set up environment variable ---
 
-if prompt_yn "set ${DB_PASSWORD_ENV} now?"; then
+DB_PASSWORD=""
+EXISTING_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
+
+if [ -n "$EXISTING_PASSWORD" ]; then
+  echo "  ${DB_PASSWORD_ENV} is already set in your environment." >&2
+  DB_PASSWORD="$EXISTING_PASSWORD"
+elif prompt_yn "set ${DB_PASSWORD_ENV} now?"; then
   DB_PASSWORD=$(prompt_secret "  password: ")
   SHELL_NAME=$(basename "${SHELL:-/bin/sh}")
   case "$SHELL_NAME" in
@@ -103,8 +138,9 @@ if prompt_yn "set ${DB_PASSWORD_ENV} now?"; then
     bash) RC_FILE="$HOME/.bashrc" ;;
     *)    RC_FILE="" ;;
   esac
+  ESCAPED_PASSWORD=$(escape_single_quotes "$DB_PASSWORD")
   if [ -n "$RC_FILE" ] && prompt_yn "  append export to ${RC_FILE}?"; then
-    printf '\nexport %s='\''%s'\''\n' "$DB_PASSWORD_ENV" "$DB_PASSWORD" >> "$RC_FILE"
+    printf '\nexport %s='\''%s'\''\n' "$DB_PASSWORD_ENV" "$ESCAPED_PASSWORD" >> "$RC_FILE"
     echo "  added to ${RC_FILE} — restart your shell or run: source ${RC_FILE}" >&2
   else
     export "${DB_PASSWORD_ENV}=${DB_PASSWORD}"
@@ -123,26 +159,31 @@ if prompt_yn "discover all databases on this host?"; then
     echo "  psql not found — enter database names manually." >&2
     echo "  (install postgresql-client to enable auto-discovery)" >&2
     echo ""
-    echo "  enter database names, one per line. empty line to finish:" >&2
-    DATABASES=$(collect_list "  database: ")
+    DATABASES=$(collect_databases)
   else
-    # use existing env var or prompt for password
+    # use existing password or prompt for one
     if [ -n "$DB_PASSWORD" ]; then
       PASS="$DB_PASSWORD"
     else
       PASS=$(prompt_secret "  password (for discovery, not stored): ")
     fi
     echo "  connecting to ${DB_HOST}:${DB_PORT}..." >&2
+    TMP_ERR=$(mktemp)
     DISCOVERED=$(PGPASSWORD="$PASS" psql \
       -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres \
-      -t -A -c "SELECT datname FROM pg_database WHERE NOT datistemplate ORDER BY datname" 2>&1) || {
-      echo "  connection failed: ${DISCOVERED}" >&2
+      --no-psqlrc -t -A \
+      -c "SELECT datname FROM pg_database WHERE NOT datistemplate ORDER BY datname" \
+      2>"$TMP_ERR") || {
+      ERR_MSG=$(cat "$TMP_ERR" 2>/dev/null)
+      rm -f "$TMP_ERR"
+      echo "  connection failed: ${ERR_MSG}" >&2
       echo "" >&2
       echo "  enter database names manually instead." >&2
-      echo "  enter database names, one per line. empty line to finish:" >&2
-      DATABASES=$(collect_list "  database: ")
+      DATABASES=$(collect_databases)
       DISCOVERED=""
     }
+    rm -f "$TMP_ERR"
+    PASS=""
     if [ -n "$DISCOVERED" ]; then
       DB_COUNT=$(echo "$DISCOVERED" | wc -l | tr -d ' ')
       echo "  found ${DB_COUNT} databases:" >&2
@@ -151,20 +192,18 @@ if prompt_yn "discover all databases on this host?"; then
       done
       echo "" >&2
       if prompt_yn "  use all ${DB_COUNT} databases?"; then
-        DATABASES=$(echo "$DISCOVERED" | tr '\n' ' ')
+        DATABASES="$DISCOVERED"
       else
-        echo "  enter the databases you want, one per line. empty line to finish:" >&2
-        DATABASES=$(collect_list "  database: ")
+        DATABASES=$(collect_databases)
       fi
     fi
   fi
 else
   echo ""
-  echo "  enter database names, one per line. empty line to finish:" >&2
-  DATABASES=$(collect_list "  database: ")
+  DATABASES=$(collect_databases)
 fi
 
-if [ -z "$(echo "$DATABASES" | tr -d ' ')" ]; then
+if [ -z "$(echo "$DATABASES" | tr -d '[:space:]')" ]; then
   echo "  no databases specified. exiting." >&2
   exit 1
 fi
@@ -173,21 +212,19 @@ echo ""
 
 # --- per-database filtering ---
 
-# DB_CONFIGS holds per-database YAML fragments (schema/table filters)
-# indexed by database name via temp files
 CONF_DIR=$(mktemp -d)
 trap "rm -rf '$CONF_DIR'" EXIT INT TERM
 
 DB_COUNT=0
-for DB in $DATABASES; do
+echo "$DATABASES" | while IFS= read -r _d; do
+  [ -z "$_d" ] && continue
   DB_COUNT=$((DB_COUNT + 1))
 done
 
-if [ "$DB_COUNT" -gt 1 ]; then
-  echo "  configuring ${DB_COUNT} databases" >&2
-fi
-
-for DB in $DATABASES; do
+DB_IDX=0
+echo "$DATABASES" | while IFS= read -r DB; do
+  [ -z "$DB" ] && continue
+  DB_IDX=$((DB_IDX + 1))
   DB_SCHEMAS=""
   DB_TABLES=""
 
@@ -221,9 +258,9 @@ for DB in $DATABASES; do
     fi
   fi
 
-  # write per-db fragment
-  printf '%s' "${DB_SCHEMAS}" > "${CONF_DIR}/${DB}.schemas"
-  printf '%s' "${DB_TABLES}" > "${CONF_DIR}/${DB}.tables"
+  # write per-db fragment using numeric index to avoid path traversal
+  printf '%s' "${DB_SCHEMAS}" > "${CONF_DIR}/${DB_IDX}.schemas"
+  printf '%s' "${DB_TABLES}" > "${CONF_DIR}/${DB_IDX}.tables"
 done
 
 echo ""
@@ -236,9 +273,12 @@ KM_PATH=$(prompt_default "knowledgemap path" "knowledgemap.db")
 
 {
   echo "databases:"
-  for DB in $DATABASES; do
-    DB_SCHEMAS=$(cat "${CONF_DIR}/${DB}.schemas" 2>/dev/null || true)
-    DB_TABLES=$(cat "${CONF_DIR}/${DB}.tables" 2>/dev/null || true)
+  DB_IDX=0
+  echo "$DATABASES" | while IFS= read -r DB; do
+    [ -z "$DB" ] && continue
+    DB_IDX=$((DB_IDX + 1))
+    DB_SCHEMAS=$(cat "${CONF_DIR}/${DB_IDX}.schemas" 2>/dev/null || true)
+    DB_TABLES=$(cat "${CONF_DIR}/${DB_IDX}.tables" 2>/dev/null || true)
     cat << ENTRY
   - name: "${DB}"
     host: "${DB_HOST}"
@@ -262,7 +302,8 @@ echo ""
 echo "wrote ${CONFIG_FILE}"
 echo ""
 echo "next steps:"
-if [ -z "$DB_PASSWORD" ]; then
+CURRENT_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
+if [ -z "$CURRENT_PASSWORD" ]; then
   echo "  export ${DB_PASSWORD_ENV}='your-password'"
 fi
 echo "  go-postgres-mcp --config ${CONFIG_FILE}"
