@@ -305,7 +305,7 @@
         <button class="config-tab" role="tab" aria-selected="false" aria-controls="tab-scoped" onclick="showTab('scoped', this)">scoped</button>
       </div>
       <div class="config-block" id="tab-setup" role="tabpanel">
-        <pre><code><span class="c"># interactive setup — discovers databases on your host, generates config.yaml</span></code></pre>
+        <pre><code><span class="c"># interactive setup — discovers databases, generates config.yaml, adds to Claude Code</span></code></pre>
         <div class="cmd" id="setup-cmd" style="margin-top: 8px">curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/setup.sh | sh<button class="copy-btn" aria-label="Copy setup command" onclick="copyText('curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/setup.sh | sh', this)">cp</button></div>
       </div>
       <div class="config-block hidden" id="tab-minimal" role="tabpanel" data-yaml="# config.yaml — full discovery, all schemas and tables

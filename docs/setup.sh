@@ -255,7 +255,6 @@ if ask_yn "discover all databases on this host?"; then
       DISCOVERED=""
     }
     rm -f "$TMP_ERR"
-    DB_PASSWORD=""
     if [ -n "$DISCOVERED" ]; then
       DB_COUNT=$(echo "$DISCOVERED" | wc -l | tr -d ' ')
       ok "found ${BOLD}${DB_COUNT}${RST} databases:"
@@ -288,16 +287,19 @@ printf '\n' >&2
 CONF_DIR=$(mktemp -d)
 trap 'rm -rf "$CONF_DIR"' EXIT INT TERM
 
-DB_IDX=0
-echo "$DATABASES" | while IFS= read -r DB; do
-  [ -z "$DB" ] && continue
-  DB_IDX=$((DB_IDX + 1))
-  DB_SCHEMAS=""
-  DB_TABLES=""
+if ask_yn "configure schema or table filters for any database?"; then
+  printf '\n' >&2
+  DB_IDX=0
+  echo "$DATABASES" | while IFS= read -r DB; do
+    [ -z "$DB" ] && continue
+    DB_IDX=$((DB_IDX + 1))
+    DB_SCHEMAS=""
+    DB_TABLES=""
 
-  if ask_yn "configure filters for ${BOLD}${DB}${RST}? (default: discover all)"; then
+    ohai "${DB}"
+
     # Schema filter
-    if ask_yn "filter schemas for ${DB}?"; then
+    if ask_yn "filter schemas?"; then
       info "enter schema names, one per line. empty line to finish:"
       while true; do
         S=$(ask "schema:")
@@ -309,7 +311,7 @@ echo "$DATABASES" | while IFS= read -r DB; do
     fi
 
     # Table filter
-    if ask_yn "filter tables for ${DB}?"; then
+    if ask_yn "filter tables?"; then
       FILTER_MODE=$(ask_default "mode" "include")
       ok "mode: ${BOLD}${FILTER_MODE}${RST}"
       info "enter table names (schema.table), one per line. empty line to finish:"
@@ -326,13 +328,18 @@ echo "$DATABASES" | while IFS= read -r DB; do
       ${FILTER_MODE}:${DB_TABLES}"
       fi
     fi
-  else
-    ok "${DB}: ${DIM}discover all${RST}"
-  fi
 
-  printf '%s' "${DB_SCHEMAS}" > "${CONF_DIR}/${DB_IDX}.schemas"
-  printf '%s' "${DB_TABLES}" > "${CONF_DIR}/${DB_IDX}.tables"
-done
+    if [ -z "$DB_SCHEMAS" ] && [ -z "$DB_TABLES" ]; then
+      ok "${DB}: ${DIM}no filters${RST}"
+    fi
+
+    printf '%s' "${DB_SCHEMAS}" > "${CONF_DIR}/${DB_IDX}.schemas"
+    printf '%s' "${DB_TABLES}" > "${CONF_DIR}/${DB_IDX}.tables"
+    printf '\n' >&2
+  done
+else
+  ok "discover all schemas and tables"
+fi
 
 printf '\n' >&2
 
@@ -428,17 +435,27 @@ if command -v claude >/dev/null 2>&1; then
       MCP_BIN="go-postgres-mcp"
     fi
 
-    # Pass env var with ${VAR} interpolation so Claude Code reads it
-    # from the user's environment at runtime
-    info "running: ${DIM}claude mcp add ...${RST}"
-    if claude mcp add --transport stdio \
-      --env "${DB_PASSWORD_ENV}=\${${DB_PASSWORD_ENV}}" \
-      "$MCP_NAME" -- "$MCP_BIN" --config "$CONFIG_FILE"; then
-      ok "added ${BOLD}${MCP_NAME}${RST} to Claude Code"
+    # Resolve the password for the env flag
+    MCP_PASSWORD="$DB_PASSWORD"
+    if [ -z "$MCP_PASSWORD" ]; then
+      MCP_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
+    fi
+
+    if [ -z "$MCP_PASSWORD" ]; then
+      warn "${DB_PASSWORD_ENV} is not set — you'll need to add it manually"
+      info "  ${BOLD}claude mcp add --transport stdio --env ${DB_PASSWORD_ENV}=YOUR_PASSWORD ${MCP_NAME} -- ${MCP_BIN} --config ${CONFIG_FILE}${RST}"
     else
-      warn "could not add MCP server automatically"
-      info "add it manually:"
-      info "  ${BOLD}claude mcp add --transport stdio --env ${DB_PASSWORD_ENV}=\${${DB_PASSWORD_ENV}} ${MCP_NAME} -- ${MCP_BIN} --config ${CONFIG_FILE}${RST}"
+      info "running: ${DIM}claude mcp add ...${RST}"
+      if claude mcp add --transport stdio \
+        --env "${DB_PASSWORD_ENV}=${MCP_PASSWORD}" \
+        "$MCP_NAME" -- "$MCP_BIN" --config "$CONFIG_FILE"; then
+        ok "added ${BOLD}${MCP_NAME}${RST} to Claude Code"
+      else
+        warn "could not add MCP server automatically"
+        info "add it manually:"
+        info "  ${BOLD}claude mcp add --transport stdio --env ${DB_PASSWORD_ENV}=YOUR_PASSWORD ${MCP_NAME} -- ${MCP_BIN} --config ${CONFIG_FILE}${RST}"
+      fi
+      MCP_PASSWORD=""
     fi
     printf '\n' >&2
   fi
