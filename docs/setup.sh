@@ -391,6 +391,40 @@ printf '\n' >&2
 ok "wrote ${BOLD}${CONFIG_FILE}${RST}"
 printf '\n' >&2
 
+# --- claude code integration ---
+
+if command -v claude >/dev/null 2>&1; then
+  ohai "Claude Code"
+  info "detected ${BOLD}claude${RST} CLI"
+  if ask_yn "add as an MCP server in Claude Code?"; then
+    MCP_NAME=$(ask_default "server name" "postgres")
+    ok "server name: ${BOLD}${MCP_NAME}${RST}"
+
+    # Detect binary path
+    if command -v go-postgres-mcp >/dev/null 2>&1; then
+      MCP_BIN=$(command -v go-postgres-mcp)
+    else
+      MCP_BIN="go-postgres-mcp"
+    fi
+
+    # Pass env var with ${VAR} interpolation so Claude Code reads it
+    # from the user's environment at runtime
+    info "running: ${DIM}claude mcp add ...${RST}"
+    if claude mcp add --transport stdio \
+      --env "${DB_PASSWORD_ENV}=\${${DB_PASSWORD_ENV}}" \
+      "$MCP_NAME" -- "$MCP_BIN" --config "$CONFIG_FILE"; then
+      ok "added ${BOLD}${MCP_NAME}${RST} to Claude Code"
+    else
+      warn "could not add MCP server automatically"
+      info "add it manually:"
+      info "  ${BOLD}claude mcp add --transport stdio --env ${DB_PASSWORD_ENV}=\${${DB_PASSWORD_ENV}} ${MCP_NAME} -- ${MCP_BIN} --config ${CONFIG_FILE}${RST}"
+    fi
+    printf '\n' >&2
+  fi
+fi
+
+# --- next steps ---
+
 ohai "Next steps"
 CURRENT_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
 if [ -z "$CURRENT_PASSWORD" ]; then
