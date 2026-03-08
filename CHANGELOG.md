@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.5.0...v1.5.1) (2026-03-08)
+
+
+### Bug Fixes
+
+* report CI status to PRs on workflow_dispatch runs ([#45](https://github.com/peter-trerotola/go-postgres-mcp/issues/45)) ([937a46f](https://github.com/peter-trerotola/go-postgres-mcp/commit/937a46ffc22be7e104588bc56d44045e24c311d3))
+
 ## [1.5.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.4.0...v1.5.0) (2026-03-08)
 
 
