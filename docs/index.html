@@ -122,6 +122,70 @@
       padding-left: 16px;
     }
 
+    .config-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 0;
+    }
+
+    .config-tab {
+      background: none;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      color: var(--dim);
+      padding: 6px 16px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+    }
+
+    .config-tab.active {
+      color: var(--bright);
+      background: #111;
+      border-bottom: 1px solid #111;
+      margin-bottom: -1px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .config-tab:hover:not(.active) { color: var(--text); }
+
+    .config-tab:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .config-block {
+      position: relative;
+      background: #111;
+      border: 1px solid var(--border);
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .config-block pre {
+      margin: 0;
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .config-block code {
+      color: var(--text);
+    }
+
+    .config-block .copy-btn {
+      top: 8px;
+      right: 8px;
+    }
+
+    .config-block .c { color: var(--dim); }
+    .config-block .k { color: var(--cyan); }
+    .config-block .s { color: var(--green); }
+    .config-block .n { color: var(--bright); }
+
+    .hidden { display: none; }
+
     .platform-note {
       color: var(--dim);
       font-size: 12px;
@@ -219,6 +283,99 @@
     </div>
 
     <div class="section">
+      <div class="section-label">config</div>
+      <div class="config-tabs" role="tablist">
+        <button class="config-tab active" role="tab" aria-selected="true" aria-controls="tab-setup" onclick="showTab('setup', this)">setup</button>
+        <button class="config-tab" role="tab" aria-selected="false" aria-controls="tab-minimal" onclick="showTab('minimal', this)">minimal</button>
+        <button class="config-tab" role="tab" aria-selected="false" aria-controls="tab-scoped" onclick="showTab('scoped', this)">scoped</button>
+      </div>
+      <div class="config-block" id="tab-setup" role="tabpanel">
+        <pre><code><span class="c"># interactive setup — prompts for connection details, generates config.yaml</span></code></pre>
+        <div class="cmd" id="setup-cmd" style="margin-top: 8px">curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/setup.sh | sh<button class="copy-btn" aria-label="Copy setup command" onclick="copyText('curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/setup.sh | sh', this)">cp</button></div>
+      </div>
+      <div class="config-block hidden" id="tab-minimal" role="tabpanel" data-yaml="# config.yaml — full discovery, all schemas and tables
+databases:
+  - name: &quot;mydb&quot;
+    host: &quot;localhost&quot;
+    port: 5432
+    database: &quot;mydb&quot;
+    user: &quot;readonly_user&quot;
+    password_env: &quot;DB_PASSWORD&quot;
+
+knowledgemap:
+  path: &quot;knowledgemap.db&quot;
+  auto_discover_on_startup: true">
+        <button class="copy-btn" aria-label="Copy minimal config" onclick="copyText(this.parentElement.dataset.yaml, this)">cp</button>
+        <pre><code><span class="c"># config.yaml — full discovery, all schemas and tables</span>
+<span class="k">databases</span>:
+  - <span class="k">name</span>: <span class="s">"mydb"</span>
+    <span class="k">host</span>: <span class="s">"localhost"</span>
+    <span class="k">port</span>: <span class="n">5432</span>
+    <span class="k">database</span>: <span class="s">"mydb"</span>
+    <span class="k">user</span>: <span class="s">"readonly_user"</span>
+    <span class="k">password_env</span>: <span class="s">"DB_PASSWORD"</span>
+
+<span class="k">knowledgemap</span>:
+  <span class="k">path</span>: <span class="s">"knowledgemap.db"</span>
+  <span class="k">auto_discover_on_startup</span>: <span class="n">true</span></code></pre>
+      </div>
+      <div class="config-block hidden" id="tab-scoped" role="tabpanel" data-yaml="# config.yaml — narrow scope: specific schemas and tables only
+databases:
+  - name: &quot;production&quot;
+    host: &quot;db.example.com&quot;
+    port: 5432
+    database: &quot;app_prod&quot;
+    user: &quot;mcp_reader&quot;
+    password_env: &quot;PROD_DB_PASSWORD&quot;
+    sslmode: &quot;require&quot;
+
+    # only discover these schemas
+    schemas:
+      - &quot;public&quot;
+      - &quot;billing&quot;
+
+    # only discover these tables
+    tables:
+      include:
+        - &quot;public.users&quot;
+        - &quot;public.orders&quot;
+        - &quot;billing.invoices&quot;
+        - &quot;billing.line_items&quot;
+
+knowledgemap:
+  path: &quot;/data/knowledgemap.db&quot;
+  auto_discover_on_startup: true">
+        <button class="copy-btn" aria-label="Copy scoped config" onclick="copyText(this.parentElement.dataset.yaml, this)">cp</button>
+        <pre><code><span class="c"># config.yaml — narrow scope: specific schemas and tables only</span>
+<span class="k">databases</span>:
+  - <span class="k">name</span>: <span class="s">"production"</span>
+    <span class="k">host</span>: <span class="s">"db.example.com"</span>
+    <span class="k">port</span>: <span class="n">5432</span>
+    <span class="k">database</span>: <span class="s">"app_prod"</span>
+    <span class="k">user</span>: <span class="s">"mcp_reader"</span>
+    <span class="k">password_env</span>: <span class="s">"PROD_DB_PASSWORD"</span>
+    <span class="k">sslmode</span>: <span class="s">"require"</span>
+
+    <span class="c"># only discover these schemas</span>
+    <span class="k">schemas</span>:
+      - <span class="s">"public"</span>
+      - <span class="s">"billing"</span>
+
+    <span class="c"># only discover these tables</span>
+    <span class="k">tables</span>:
+      <span class="k">include</span>:
+        - <span class="s">"public.users"</span>
+        - <span class="s">"public.orders"</span>
+        - <span class="s">"billing.invoices"</span>
+        - <span class="s">"billing.line_items"</span>
+
+<span class="k">knowledgemap</span>:
+  <span class="k">path</span>: <span class="s">"/data/knowledgemap.db"</span>
+  <span class="k">auto_discover_on_startup</span>: <span class="n">true</span></code></pre>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="section-label">features</div>
       <div class="features">
         <div class="feature">
@@ -254,13 +411,18 @@
   </div>
 
   <script>
-    function copy(id) {
-      const el = document.getElementById(id);
-      const btn = el.querySelector('.copy-btn');
-      const clone = el.cloneNode(true);
-      const cloneBtn = clone.querySelector('.copy-btn');
-      if (cloneBtn) cloneBtn.remove();
-      const text = clone.textContent.trim();
+    function showTab(name, btn) {
+      document.querySelectorAll('.config-block').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.config-tab').forEach(el => {
+        el.classList.remove('active');
+        el.setAttribute('aria-selected', 'false');
+      });
+      document.getElementById('tab-' + name).classList.remove('hidden');
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+    }
+
+    function copyText(text, btn) {
       navigator.clipboard.writeText(text).then(() => {
         btn.textContent = 'ok';
         setTimeout(() => btn.textContent = 'cp', 1500);
@@ -268,6 +430,15 @@
         btn.textContent = '!!';
         setTimeout(() => btn.textContent = 'cp', 1500);
       });
+    }
+
+    function copy(id) {
+      const el = document.getElementById(id);
+      const btn = el.querySelector('.copy-btn');
+      const clone = el.cloneNode(true);
+      const cloneBtn = clone.querySelector('.copy-btn');
+      if (cloneBtn) cloneBtn.remove();
+      copyText(clone.textContent.trim(), btn);
     }
   </script>
 </body>
