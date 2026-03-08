@@ -160,7 +160,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "$TAG" archives/* --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$TAG" archives/* --clobber --repo "$GITHUB_REPOSITORY"
 
   docker:
     runs-on: ubuntu-latest
