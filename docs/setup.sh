@@ -84,7 +84,11 @@ fi
 DB_HOST=$(prompt_default "host" "localhost")
 DB_PORT=$(prompt_default "port" "5432")
 DB_USER=$(prompt "user: ")
-DB_PASSWORD_ENV=$(prompt_default "password env var name" "DB_PASSWORD")
+echo ""  >&2
+echo "  the password is read from an environment variable at runtime," >&2
+echo "  never stored in the config file." >&2
+echo "" >&2
+DB_PASSWORD_ENV=$(prompt_default "env var name for the password" "DB_PASSWORD")
 DB_SSLMODE=$(prompt_default "sslmode (disable/require/verify-full)" "disable")
 
 echo ""
