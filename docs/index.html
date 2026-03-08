@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>go-postgres-mcp</title>
+  <meta name="description" content="Read-only PostgreSQL MCP server with schema intelligence">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --code-bg: #1c2129;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    header {
+      padding: 80px 0 48px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .tagline {
+      color: var(--text-muted);
+      font-size: 1.15rem;
+      margin-top: 12px;
+    }
+
+    .badges {
+      margin-top: 20px;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .install-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 32px;
+      margin: 32px 0;
+    }
+
+    .install-section h2 {
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .code-block {
+      position: relative;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 48px 16px 16px;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--green);
+      margin-bottom: 12px;
+    }
+
+    .code-block:last-child { margin-bottom: 0; }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: var(--border);
+      border: none;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-family: inherit;
+    }
+
+    .copy-btn:hover { color: var(--text); background: #484f58; }
+
+    .or-divider {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin: 12px 0;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 40px 0;
+    }
+
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .feature h3 {
+      font-size: 0.95rem;
+      margin-bottom: 6px;
+    }
+
+    .feature p {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .links {
+      text-align: center;
+      padding: 48px 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .links a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .links a:hover { text-decoration: underline; }
+
+    .links span { margin: 0 12px; }
+
+    .platform-note {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 48px 0 32px; }
+      h1 { font-size: 1.8rem; }
+      .features { grid-template-columns: 1fr; }
+      .install-section { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>go-postgres-mcp</h1>
+      <p class="tagline">Read-only PostgreSQL MCP server with schema intelligence</p>
+      <div class="badges">
+        <a href="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/ci.yml"><img src="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+        <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases"><img src="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/release.yml/badge.svg" alt="Release"></a>
+        <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/peter-trerotola/go-postgres-mcp?color=3fb950" alt="Latest Release"></a>
+        <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+      </div>
+    </header>
+
+    <div class="install-section">
+      <h2>Install</h2>
+      <div class="code-block" id="curl-cmd">curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/install.sh | sh<button class="copy-btn" onclick="copy('curl-cmd')">Copy</button></div>
+      <div class="or-divider">or</div>
+      <div class="code-block" id="go-cmd">go install github.com/peter-trerotola/go-postgres-mcp/cmd@latest<button class="copy-btn" onclick="copy('go-cmd')">Copy</button></div>
+      <div class="or-divider">or</div>
+      <div class="code-block" id="docker-cmd">docker pull ghcr.io/peter-trerotola/go-postgres-mcp:latest<button class="copy-btn" onclick="copy('docker-cmd')">Copy</button></div>
+      <p class="platform-note">Supports Linux and macOS on amd64 and arm64.</p>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <h3>9 MCP Tools</h3>
+        <p>Query, explore schemas, search tables, and discover database structure through natural language.</p>
+      </div>
+      <div class="feature">
+        <h3>Read-Only by Design</h3>
+        <p>4 layers of protection: AST parsing, regex guard, read-only transactions, and PostgreSQL grants.</p>
+      </div>
+      <div class="feature">
+        <h3>Schema Intelligence</h3>
+        <p>Auto-discovers schemas with SQLite-backed FTS5 knowledge map. Injects schema context into query responses.</p>
+      </div>
+      <div class="feature">
+        <h3>Works Everywhere</h3>
+        <p>Claude Desktop, Claude Code, Cursor, and any MCP-compatible client. Runs as a stdio server.</p>
+      </div>
+    </div>
+
+    <div class="links">
+      <a href="https://github.com/peter-trerotola/go-postgres-mcp">GitHub</a>
+      <span>&middot;</span>
+      <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases">Releases</a>
+      <span>&middot;</span>
+      <a href="https://github.com/peter-trerotola/go-postgres-mcp#configuration">Docs</a>
+      <span>&middot;</span>
+      <a href="https://github.com/peter-trerotola/go-postgres-mcp/issues">Issues</a>
+    </div>
+  </div>
+
+  <script>
+    function copy(id) {
+      const el = document.getElementById(id);
+      const btn = el.querySelector('.copy-btn');
+      const clone = el.cloneNode(true);
+      const cloneBtn = clone.querySelector('.copy-btn');
+      if (cloneBtn) cloneBtn.remove();
+      const text = clone.textContent.trim();
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 1500);
+      });
+    }
+  </script>
+</body>
+</html>
