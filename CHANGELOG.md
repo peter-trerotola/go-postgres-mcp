@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.4](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.1.3...v1.1.4) (2026-03-08)
+
+
+### Bug Fixes
+
+* add actions:write permission to trigger-release workflow ([#35](https://github.com/peter-trerotola/go-postgres-mcp/issues/35)) ([d3ad890](https://github.com/peter-trerotola/go-postgres-mcp/commit/d3ad890cb5df7cfcd7e95c2b7f9db9ef668b24dd))
+* auto-trigger CI on release-please PRs ([#32](https://github.com/peter-trerotola/go-postgres-mcp/issues/32)) ([6e0d526](https://github.com/peter-trerotola/go-postgres-mcp/commit/6e0d526643ddbf043c843559dbc8906dfaf83709))
+* parse release-please pr output as JSON ([#34](https://github.com/peter-trerotola/go-postgres-mcp/issues/34)) ([1023b7c](https://github.com/peter-trerotola/go-postgres-mcp/commit/1023b7c07fbf18746a50994848df3020cd93c5cf))
+
 ## [1.1.3](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.1.2...v1.1.3) (2026-03-08)
 
 
