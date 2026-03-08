@@ -6,7 +6,7 @@
 
 set -e
 
-CONFIG_FILE="${CONFIG_FILE:-config.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-${HOME}/.config/go-postgres-mcp/config.yaml}"
 
 # --- colors (tty-aware) ---
 
@@ -97,6 +97,14 @@ escape_yaml_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+expand_tilde() {
+  case "$1" in
+    "~/"*) printf '%s' "${HOME}/${1#\~/}" ;;
+    "~")   printf '%s' "$HOME" ;;
+    *)     printf '%s' "$1" ;;
+  esac
+}
+
 # --- start ---
 
 if [ -z "$GO_POSTGRES_MCP_NO_BANNER" ]; then
@@ -125,7 +133,9 @@ fi
 ohai "go-postgres-mcp setup"
 printf '\n' >&2
 
-CONFIG_FILE=$(ask_default "config file path" "${CONFIG_FILE}")
+CONFIG_DISPLAY=$(echo "$CONFIG_FILE" | sed "s|^${HOME}/|~/|")
+CONFIG_FILE=$(ask_default "config file path" "${CONFIG_DISPLAY}")
+CONFIG_FILE=$(expand_tilde "$CONFIG_FILE")
 ok "config file path: ${BOLD}${CONFIG_FILE}${RST}"
 printf '\n' >&2
 
@@ -186,9 +196,8 @@ EXISTING_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
 
 if [ -n "$EXISTING_PASSWORD" ]; then
   ok "${DB_PASSWORD_ENV} is already set in your environment"
-  if ask_yn "use the existing value?"; then
+  if ask_yn "use it?"; then
     DB_PASSWORD="$EXISTING_PASSWORD"
-    ok "using existing ${BOLD}${DB_PASSWORD_ENV}${RST}"
   fi
 fi
 
@@ -227,14 +236,12 @@ if ask_yn "discover all databases on this host?"; then
     printf '\n' >&2
     DATABASES=$(collect_databases)
   else
-    if [ -n "$DB_PASSWORD" ]; then
-      PASS="$DB_PASSWORD"
-    else
-      PASS=$(ask_secret "password (for discovery, not stored):")
+    if [ -z "$DB_PASSWORD" ]; then
+      DB_PASSWORD=$(ask_secret "password (for discovery, not stored):")
     fi
     info "connecting to ${BOLD}${DB_HOST}:${DB_PORT}${RST}..."
     TMP_ERR=$(mktemp)
-    DISCOVERED=$(PGPASSWORD="$PASS" psql \
+    DISCOVERED=$(PGPASSWORD="$DB_PASSWORD" psql \
       -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres \
       --no-psqlrc -t -A \
       -c "SELECT datname FROM pg_database WHERE NOT datistemplate ORDER BY datname" \
@@ -248,7 +255,7 @@ if ask_yn "discover all databases on this host?"; then
       DISCOVERED=""
     }
     rm -f "$TMP_ERR"
-    PASS=""
+    DB_PASSWORD=""
     if [ -n "$DISCOVERED" ]; then
       DB_COUNT=$(echo "$DISCOVERED" | wc -l | tr -d ' ')
       ok "found ${BOLD}${DB_COUNT}${RST} databases:"
@@ -357,6 +364,12 @@ printf '\n' >&2
 
 # --- write config ---
 
+CONFIG_DIR=$(dirname "$CONFIG_FILE")
+if [ ! -d "$CONFIG_DIR" ]; then
+  mkdir -p "$CONFIG_DIR"
+  ok "created ${BOLD}${CONFIG_DIR}${RST}"
+fi
+
 {
   echo "databases:"
   DB_IDX=0
@@ -389,6 +402,8 @@ printf '\n' >&2
 ok "wrote ${BOLD}${CONFIG_FILE}${RST}"
 printf '\n' >&2
 
+# --- next steps ---
+
 ohai "Next steps"
 CURRENT_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
 if [ -z "$CURRENT_PASSWORD" ]; then
@@ -396,3 +411,35 @@ if [ -z "$CURRENT_PASSWORD" ]; then
 fi
 info "  ${BOLD}go-postgres-mcp --config ${CONFIG_FILE}${RST}"
 printf '\n' >&2
+
+# --- claude code integration ---
+
+if command -v claude >/dev/null 2>&1; then
+  ohai "Claude Code"
+  info "detected ${BOLD}claude${RST} CLI"
+  if ask_yn "add as an MCP server in Claude Code?"; then
+    MCP_NAME=$(ask_default "server name" "postgres")
+    ok "server name: ${BOLD}${MCP_NAME}${RST}"
+
+    # Detect binary path
+    if command -v go-postgres-mcp >/dev/null 2>&1; then
+      MCP_BIN=$(command -v go-postgres-mcp)
+    else
+      MCP_BIN="go-postgres-mcp"
+    fi
+
+    # Pass env var with ${VAR} interpolation so Claude Code reads it
+    # from the user's environment at runtime
+    info "running: ${DIM}claude mcp add ...${RST}"
+    if claude mcp add --transport stdio \
+      --env "${DB_PASSWORD_ENV}=\${${DB_PASSWORD_ENV}}" \
+      "$MCP_NAME" -- "$MCP_BIN" --config "$CONFIG_FILE"; then
+      ok "added ${BOLD}${MCP_NAME}${RST} to Claude Code"
+    else
+      warn "could not add MCP server automatically"
+      info "add it manually:"
+      info "  ${BOLD}claude mcp add --transport stdio --env ${DB_PASSWORD_ENV}=\${${DB_PASSWORD_ENV}} ${MCP_NAME} -- ${MCP_BIN} --config ${CONFIG_FILE}${RST}"
+    fi
+    printf '\n' >&2
+  fi
+fi
