@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.1.2...v1.1.3) (2026-03-08)
+
+
+### Bug Fixes
+
+* auto-trigger release workflow on PR merge ([#30](https://github.com/peter-trerotola/go-postgres-mcp/issues/30)) ([4a62f1e](https://github.com/peter-trerotola/go-postgres-mcp/commit/4a62f1e80b85ea8c73263a5b12bf0f6eb62ff4c6))
+
 ## [1.1.2](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.1.1...v1.1.2) (2026-03-07)
 
 
