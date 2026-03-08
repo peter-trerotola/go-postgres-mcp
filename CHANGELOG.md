@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.8.0...v1.8.1) (2026-03-08)
+
+
+### Bug Fixes
+
+* read from /dev/tty in setup script for curl pipe compatibility ([#63](https://github.com/peter-trerotola/go-postgres-mcp/issues/63)) ([b27e416](https://github.com/peter-trerotola/go-postgres-mcp/commit/b27e416b4a7a2d353691001bbdcb8a5f62dbd04f))
+
 ## [1.8.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.7.0...v1.8.0) (2026-03-08)
 
 
