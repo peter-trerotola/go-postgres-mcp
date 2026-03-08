@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.11.0...v1.11.1) (2026-03-08)
+
+
+### Bug Fixes
+
+* simplify filters prompt, fix claude code env vars, update pages ([#71](https://github.com/peter-trerotola/go-postgres-mcp/issues/71)) ([0baa5a7](https://github.com/peter-trerotola/go-postgres-mcp/commit/0baa5a7505f82762062a5ba818a38138146e98c4))
+
 ## [1.11.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.10.0...v1.11.0) (2026-03-08)
 
 
