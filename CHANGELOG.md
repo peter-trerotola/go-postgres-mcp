@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.2](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.5.1...v1.5.2) (2026-03-08)
+
+
+### Bug Fixes
+
+* add cron trigger to release workflow ([#47](https://github.com/peter-trerotola/go-postgres-mcp/issues/47)) ([f771222](https://github.com/peter-trerotola/go-postgres-mcp/commit/f771222599f3a1d8a990d5fe71f250c5abe085b5))
+* remove auto-merge workflow and cron schedule ([#48](https://github.com/peter-trerotola/go-postgres-mcp/issues/48)) ([115943b](https://github.com/peter-trerotola/go-postgres-mcp/commit/115943b4618eacbf0154f1c11a06dd1301742fcb))
+
 ## [1.5.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.5.0...v1.5.1) (2026-03-08)
 
 
