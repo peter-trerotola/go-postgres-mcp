@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.8.1...v1.9.0) (2026-03-08)
+
+
+### Features
+
+* add database discovery to setup script ([#65](https://github.com/peter-trerotola/go-postgres-mcp/issues/65)) ([3ae0220](https://github.com/peter-trerotola/go-postgres-mcp/commit/3ae02204ec13b4c2802a46636ddf897a6037b932))
+
 ## [1.8.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.8.0...v1.8.1) (2026-03-08)
 
 
