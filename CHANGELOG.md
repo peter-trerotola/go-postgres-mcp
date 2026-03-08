@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.9.0...v1.10.0) (2026-03-08)
+
+
+### Features
+
+* redesign install and setup scripts with interactive UX ([#67](https://github.com/peter-trerotola/go-postgres-mcp/issues/67)) ([44ce207](https://github.com/peter-trerotola/go-postgres-mcp/commit/44ce20707f31c1431cf1f42f14f1a470d5d785bc))
+
 ## [1.9.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.8.1...v1.9.0) (2026-03-08)
 
 
