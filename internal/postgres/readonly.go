@@ -14,10 +14,10 @@ const maxRows = 1000
 
 // QueryResult holds the result of a read-only query.
 type QueryResult struct {
-	Columns       []string                              `json:"columns"`
-	Rows          []json.RawMessage                     `json:"rows"`
-	Count         int                                   `json:"count"`
-	Truncated     bool                                  `json:"truncated"`
+	Columns       []string                                `json:"columns"`
+	Rows          []json.RawMessage                       `json:"rows"`
+	Count         int                                     `json:"count"`
+	Truncated     bool                                    `json:"truncated"`
 	SchemaContext map[string][]knowledgemap.ColumnSummary `json:"schema_context,omitempty"`
 }
 
