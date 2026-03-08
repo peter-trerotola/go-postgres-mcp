@@ -391,6 +391,16 @@ printf '\n' >&2
 ok "wrote ${BOLD}${CONFIG_FILE}${RST}"
 printf '\n' >&2
 
+# --- next steps ---
+
+ohai "Next steps"
+CURRENT_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
+if [ -z "$CURRENT_PASSWORD" ]; then
+  info "  ${BOLD}export ${DB_PASSWORD_ENV}='your-password'${RST}"
+fi
+info "  ${BOLD}go-postgres-mcp --config ${CONFIG_FILE}${RST}"
+printf '\n' >&2
+
 # --- claude code integration ---
 
 if command -v claude >/dev/null 2>&1; then
@@ -422,13 +432,3 @@ if command -v claude >/dev/null 2>&1; then
     printf '\n' >&2
   fi
 fi
-
-# --- next steps ---
-
-ohai "Next steps"
-CURRENT_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
-if [ -z "$CURRENT_PASSWORD" ]; then
-  info "  ${BOLD}export ${DB_PASSWORD_ENV}='your-password'${RST}"
-fi
-info "  ${BOLD}go-postgres-mcp --config ${CONFIG_FILE}${RST}"
-printf '\n' >&2
