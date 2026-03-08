@@ -23,6 +23,7 @@ jobs:
         id: release
         with:
           release-type: go
+          skip-github-release: true
 
       - name: Extract version from tag
         id: version
@@ -156,17 +157,11 @@ jobs:
         working-directory: archives
         run: sha256sum *.tar.gz > checksums.txt
 
-      - name: Upload assets to draft release
+      - name: Create release with assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "$TAG" archives/* --repo "$GITHUB_REPOSITORY"
-
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
+        run: gh release create "$TAG" archives/* --title "$TAG" --generate-notes --repo "$GITHUB_REPOSITORY"
 
   docker:
     runs-on: ubuntu-latest
