@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.16.0...v1.16.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* filter discovery queries by user-visible objects ([#87](https://github.com/peter-trerotola/go-postgres-mcp/issues/87)) ([c67ebfd](https://github.com/peter-trerotola/go-postgres-mcp/commit/c67ebfd34a78154da94e953ff894665ae7ba5b31))
+
 ## [1.16.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.15.0...v1.16.0) (2026-03-09)
 
 
