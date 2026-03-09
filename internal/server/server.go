@@ -82,7 +82,7 @@ func (a *App) Start(ctx context.Context) error {
 // It triggers auto-discovery in a background goroutine so that MCP message
 // processing is not blocked. Uses sync.Once to ensure discovery runs at most
 // once, even if the hook fires multiple times (e.g. reconnects).
-func (a *App) onAfterInitialize(ctx context.Context, id any, msg *mcp.InitializeRequest, result *mcp.InitializeResult) {
+func (a *App) onAfterInitialize(_ context.Context, _ any, _ *mcp.InitializeRequest, _ *mcp.InitializeResult) {
 	if !a.cfg.KnowledgeMap.AutoDiscoverOnStartup {
 		return
 	}
