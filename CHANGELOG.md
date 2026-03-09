@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.13.0...v1.14.0) (2026-03-09)
+
+
+### Features
+
+* inject schema summary into MCP server instructions ([#81](https://github.com/peter-trerotola/go-postgres-mcp/issues/81)) ([b644a8c](https://github.com/peter-trerotola/go-postgres-mcp/commit/b644a8c93b5c77896a0f35d88d3b3761cce61aee))
+
 ## [1.13.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.12.2...v1.13.0) (2026-03-09)
 
 
