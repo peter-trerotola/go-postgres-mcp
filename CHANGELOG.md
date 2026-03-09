@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.15.0...v1.16.0) (2026-03-09)
+
+
+### Features
+
+* default knowledge map path to ~/.config/go-postgres-mcp/ ([#85](https://github.com/peter-trerotola/go-postgres-mcp/issues/85)) ([1a4b73b](https://github.com/peter-trerotola/go-postgres-mcp/commit/1a4b73b5cf07fd56f86cccbca542e00ccb8ce7c6))
+
 ## [1.15.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.14.0...v1.15.0) (2026-03-09)
 
 
