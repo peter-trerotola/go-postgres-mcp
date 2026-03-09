@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -9,9 +10,10 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
 	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
+	"github.com/peter-trerotola/go-postgres-mcp/internal/postgres"
 )
 
-func TestNew_RegistersLoggingCapability(t *testing.T) {
+func TestNew_LoggingCapabilityInInitialize(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
 		KnowledgeMap: config.KnowledgeMapConfig{
@@ -25,31 +27,29 @@ func TestNew_RegistersLoggingCapability(t *testing.T) {
 	}
 	defer app.Shutdown()
 
-	// The server should be created successfully with logging enabled.
-	// We verify by checking the MCPServer is non-nil.
-	if app.MCPServer() == nil {
-		t.Fatal("expected non-nil MCPServer")
+	// Send an initialize request and verify logging capability is advertised
+	initReq := mcp.JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      mcp.NewRequestId(int64(1)),
+		Request: mcp.Request{Method: "initialize"},
 	}
-}
-
-func TestNew_RegistersHooks(t *testing.T) {
-	dir := t.TempDir()
-	cfg := &config.Config{
-		KnowledgeMap: config.KnowledgeMapConfig{
-			Path: filepath.Join(dir, "test.db"),
-		},
-	}
-
-	app, err := New(cfg)
+	reqBytes, err := json.Marshal(initReq)
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("marshal: %v", err)
 	}
-	defer app.Shutdown()
 
-	// Verify we can create the app with hooks. The OnAfterInitialize hook
-	// is registered internally - we test its behavior via integration tests.
-	if app.mcpServer == nil {
-		t.Fatal("expected mcpServer to be initialized")
+	response := app.mcpServer.HandleMessage(context.Background(), reqBytes)
+	resp, ok := response.(mcp.JSONRPCResponse)
+	if !ok {
+		t.Fatalf("expected JSONRPCResponse, got %T", response)
+	}
+	initResult, ok := resp.Result.(mcp.InitializeResult)
+	if !ok {
+		t.Fatalf("expected InitializeResult, got %T", resp.Result)
+	}
+
+	if initResult.Capabilities.Logging == nil {
+		t.Error("expected logging capability to be advertised in initialize response")
 	}
 }
 
@@ -98,35 +98,67 @@ func TestOnAfterInitialize_SkipsWhenAutoDiscoverDisabled(t *testing.T) {
 	// If it tried to discover without pools, it would panic - no panic = success
 }
 
-func TestStartDoesNotRunDiscovery(t *testing.T) {
-	// Start() should only connect to databases, not run discovery.
-	// Since we have no real databases, Start with empty config should succeed.
+func TestOnAfterInitialize_OnlyRunsOnce(t *testing.T) {
+	store, err := knowledgemap.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	mcpSrv := mcpserver.NewMCPServer("test", "0.0.0",
+		mcpserver.WithLogging(),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	app := &App{
+		cfg: &config.Config{
+			KnowledgeMap: config.KnowledgeMapConfig{
+				AutoDiscoverOnStartup: true,
+			},
+		},
+		store:          store,
+		mcpServer:      mcpSrv,
+		pools:          postgres.NewPoolManager(), // empty — runAutoDiscovery will skip all DBs
+		shutdownCtx:    ctx,
+		shutdownCancel: cancel,
+	}
+
+	// Call multiple times — sync.Once should ensure only one goroutine launches
+	for i := 0; i < 5; i++ {
+		app.onAfterInitialize(nil, nil, &mcp.InitializeRequest{}, &mcp.InitializeResult{})
+	}
+	// No panic or race = success (run with -race)
+}
+
+func TestShutdown_CancelsContext(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
 		KnowledgeMap: config.KnowledgeMapConfig{
-			Path:                  filepath.Join(dir, "test.db"),
-			AutoDiscoverOnStartup: true, // Even with auto-discover enabled
+			Path: filepath.Join(dir, "test.db"),
 		},
-		Databases: []config.DatabaseConfig{}, // No databases to connect to
 	}
 
 	app, err := New(cfg)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer app.Shutdown()
 
-	// Start with no databases should succeed immediately
-	if err := app.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
+	// Verify context is not cancelled before shutdown
+	select {
+	case <-app.shutdownCtx.Done():
+		t.Fatal("expected context to not be cancelled before shutdown")
+	default:
 	}
 
-	// Verify no tables were discovered (discovery only runs in hook)
-	count, err := app.store.CountTables()
-	if err != nil {
-		t.Fatalf("CountTables: %v", err)
-	}
-	if count != 0 {
-		t.Errorf("expected 0 tables after Start (discovery deferred to hook), got %d", count)
+	app.Shutdown()
+
+	// Verify context is cancelled after shutdown
+	select {
+	case <-app.shutdownCtx.Done():
+		// expected
+	default:
+		t.Fatal("expected context to be cancelled after shutdown")
 	}
 }

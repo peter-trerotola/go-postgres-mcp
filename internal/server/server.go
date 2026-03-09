@@ -15,10 +15,13 @@ import (
 )
 
 type App struct {
-	cfg       *config.Config
-	pools     *postgres.PoolManager
-	store     *knowledgemap.Store
-	mcpServer *mcpserver.MCPServer
+	cfg             *config.Config
+	pools           *postgres.PoolManager
+	store           *knowledgemap.Store
+	mcpServer       *mcpserver.MCPServer
+	discoveryOnce   sync.Once
+	shutdownCtx     context.Context
+	shutdownCancel  context.CancelFunc
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -27,10 +30,13 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("opening knowledge map: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	app := &App{
-		cfg:   cfg,
-		pools: postgres.NewPoolManager(),
-		store: store,
+		cfg:            cfg,
+		pools:          postgres.NewPoolManager(),
+		store:          store,
+		shutdownCtx:    ctx,
+		shutdownCancel: cancel,
 	}
 
 	hooks := &mcpserver.Hooks{
@@ -79,20 +85,22 @@ func (a *App) Start(ctx context.Context) error {
 
 // onAfterInitialize is called after the MCP initialize handshake completes.
 // It triggers auto-discovery in a background goroutine so that MCP message
-// processing is not blocked. Progress is reported via MCP logging notifications.
+// processing is not blocked. Uses sync.Once to ensure discovery runs at most
+// once, even if the hook fires multiple times (e.g. reconnects).
 func (a *App) onAfterInitialize(ctx context.Context, id any, msg *mcp.InitializeRequest, result *mcp.InitializeResult) {
 	if !a.cfg.KnowledgeMap.AutoDiscoverOnStartup {
 		return
 	}
 
-	go a.runAutoDiscovery()
+	a.discoveryOnce.Do(func() {
+		go a.runAutoDiscovery(a.shutdownCtx)
+	})
 }
 
 // runAutoDiscovery discovers schemas for all configured databases concurrently
-// and sends MCP logging notifications to report progress.
-func (a *App) runAutoDiscovery() {
-	ctx := context.Background()
-
+// and sends MCP logging notifications to report progress. The context should
+// be tied to the server lifecycle so discovery stops on shutdown.
+func (a *App) runAutoDiscovery(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, dbCfg := range a.cfg.Databases {
 		pool, err := a.pools.Get(dbCfg.Name)
@@ -115,13 +123,18 @@ func (a *App) runAutoDiscovery() {
 	}
 	wg.Wait()
 
-	// Report summary
+	// Report summary using actual discovered counts from the knowledge map
 	tableCount, err := a.store.CountTables()
 	if err != nil {
 		log.Printf("warning: failed to count tables: %v", err)
-		tableCount = 0
+		a.sendLog(mcp.LoggingLevelWarning, "schema discovery complete but failed to count tables")
+		return
 	}
+	dbs, dbErr := a.store.ListDatabases()
 	dbCount := len(a.cfg.Databases)
+	if dbErr == nil {
+		dbCount = len(dbs)
+	}
 	summary := fmt.Sprintf("ready — %d tables across %d databases", tableCount, dbCount)
 	a.sendLog(mcp.LoggingLevelInfo, summary)
 	log.Printf("auto-discovery complete: %s", summary)
@@ -144,8 +157,11 @@ func (a *App) ServeStdio() error {
 	return mcpserver.ServeStdio(a.mcpServer)
 }
 
-// Shutdown cleans up resources.
+// Shutdown cleans up resources and cancels any in-progress discovery.
 func (a *App) Shutdown() {
+	if a.shutdownCancel != nil {
+		a.shutdownCancel()
+	}
 	a.pools.Close()
 	if a.store != nil {
 		a.store.Close()

@@ -253,9 +253,17 @@ func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (
 		return mcp.NewToolResultError(fmt.Sprintf("discovery failed: %v", err)), nil
 	}
 
-	tableCount, _ := a.store.CountTables()
-	dbCount := len(a.cfg.Databases)
-	a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("ready — %d tables across %d databases", tableCount, dbCount))
+	tableCount, err := a.store.CountTables()
+	if err != nil {
+		a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovered for %s but failed to count tables: %v", dbName, err))
+	} else {
+		dbs, dbErr := a.store.ListDatabases()
+		dbCount := len(a.cfg.Databases)
+		if dbErr == nil {
+			dbCount = len(dbs)
+		}
+		a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("ready — %d tables across %d databases", tableCount, dbCount))
+	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for database %q", dbName)), nil
 }
