@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.2](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.12.1...v1.12.2) (2026-03-09)
+
+
+### Bug Fixes
+
+* restore -e flag for claude mcp add with name-first arg order ([#77](https://github.com/peter-trerotola/go-postgres-mcp/issues/77)) ([82e2c87](https://github.com/peter-trerotola/go-postgres-mcp/commit/82e2c872b3967f662175d60bff81548e8da4da88))
+
 ## [1.12.1](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.12.0...v1.12.1) (2026-03-09)
 
 
