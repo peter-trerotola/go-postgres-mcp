@@ -94,17 +94,18 @@ databases:
     user: "u1"
     password_env: "P1"
 `
+	// Pin XDG_CONFIG_HOME so the test is deterministic across environments
+	configDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+
 	path := writeTemp(t, yaml)
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Default should be under user config dir (~/.config/go-postgres-mcp/)
-	if !strings.Contains(cfg.KnowledgeMap.Path, "go-postgres-mcp") {
-		t.Errorf("expected default km path under go-postgres-mcp config dir, got %q", cfg.KnowledgeMap.Path)
-	}
-	if !strings.HasSuffix(cfg.KnowledgeMap.Path, "knowledgemap.db") {
-		t.Errorf("expected default km path to end with knowledgemap.db, got %q", cfg.KnowledgeMap.Path)
+	want := filepath.Join(configDir, "go-postgres-mcp", "knowledgemap.db")
+	if cfg.KnowledgeMap.Path != want {
+		t.Errorf("expected default km path %q, got %q", want, cfg.KnowledgeMap.Path)
 	}
 }
 

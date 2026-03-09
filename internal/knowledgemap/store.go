@@ -20,7 +20,7 @@ type Store struct {
 func Open(path string) (*Store, error) {
 	if dir := filepath.Dir(path); dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0700); err != nil {
-			return nil, fmt.Errorf("creating knowledge map directory: %w", err)
+			return nil, fmt.Errorf("creating knowledge map directory %q: %w", dir, err)
 		}
 	}
 	db, err := sqlx.Open("sqlite", path+"?_pragma=journal_mode(wal)&_pragma=foreign_keys(on)&_pragma=busy_timeout(5000)")

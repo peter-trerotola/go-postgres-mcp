@@ -207,8 +207,9 @@ func (c *Config) validate() error {
 	return nil
 }
 
-// defaultKnowledgeMapPath returns ~/.config/go-postgres-mcp/knowledgemap.db,
+// defaultKnowledgeMapPath returns <UserConfigDir>/go-postgres-mcp/knowledgemap.db,
 // falling back to ./knowledgemap.db if the config directory cannot be resolved.
+// On Linux this is ~/.config/go-postgres-mcp/, on macOS ~/Library/Application Support/.
 func defaultKnowledgeMapPath() string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
