@@ -572,6 +572,91 @@ func TestRefreshInstructions_UpdatesMCPServer(t *testing.T) {
 	}
 }
 
+func TestHandleDiscover_AllDatabases(t *testing.T) {
+	app := newTestAppWithConfig(t, []config.DatabaseConfig{
+		{Name: "db1"}, {Name: "db2"},
+	})
+	app.pools = postgres.NewPoolManager() // no pools connected
+	app.registerTools()
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{} // no database arg
+
+	result, err := app.handleDiscover(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Both should fail (no pools), but the handler should attempt both
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "db1") || !strings.Contains(text, "db2") {
+		t.Errorf("expected both databases mentioned in error, got: %s", text)
+	}
+}
+
+func TestHandleDiscover_InvalidDatabaseType(t *testing.T) {
+	app := newTestAppWithConfig(t, []config.DatabaseConfig{
+		{Name: "db1"},
+	})
+	app.pools = postgres.NewPoolManager()
+	app.registerTools()
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"database": 123} // wrong type
+
+	result, err := app.handleDiscover(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "must be a non-empty string") {
+		t.Errorf("expected type validation error, got: %s", text)
+	}
+}
+
+func TestHandleDiscover_SpecificDatabase(t *testing.T) {
+	app := newTestAppWithConfig(t, []config.DatabaseConfig{
+		{Name: "db1"}, {Name: "db2"},
+	})
+	app.pools = postgres.NewPoolManager()
+	app.registerTools()
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"database": "db1"}
+
+	result, err := app.handleDiscover(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should fail for db1 only (no pool), but NOT attempt db2
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "db1") {
+		t.Errorf("expected db1 in error, got: %s", text)
+	}
+	if strings.Contains(text, "db2") {
+		t.Errorf("should not attempt db2 when specific database requested, got: %s", text)
+	}
+}
+
+func TestHandleDiscover_UnknownDatabase(t *testing.T) {
+	app := newTestAppWithConfig(t, []config.DatabaseConfig{
+		{Name: "db1"},
+	})
+	app.pools = postgres.NewPoolManager()
+	app.registerTools()
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"database": "nonexistent"}
+
+	result, err := app.handleDiscover(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "nonexistent") {
+		t.Errorf("expected error about unknown database, got: %s", text)
+	}
+}
+
 func TestRefreshInstructions_EmptyStoreKeepsBaseOnly(t *testing.T) {
 	store, err := knowledgemap.Open(filepath.Join(t.TempDir(), "empty.db"))
 	if err != nil {

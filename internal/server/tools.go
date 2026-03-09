@@ -233,10 +233,16 @@ func (a *App) enrichError(err error, dbName, sqlStr string) string {
 func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// If a specific database is provided, discover only that one.
 	// Otherwise, discover all configured databases.
-	dbName, _ := request.GetArguments()["database"].(string)
-
 	var targets []config.DatabaseConfig
-	if dbName != "" {
+	var dbName string
+
+	args := request.GetArguments()
+	if raw, ok := args["database"]; ok {
+		s, isStr := raw.(string)
+		if !isStr || s == "" {
+			return mcp.NewToolResultError("database must be a non-empty string"), nil
+		}
+		dbName = s
 		dbCfg, err := a.findDBConfig(dbName)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -269,7 +275,11 @@ func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (
 		if dbErr == nil {
 			dbCount = len(dbs)
 		}
-		a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("ready — %d tables across %d databases", tableCount, dbCount))
+		if len(failed) > 0 {
+			a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("partial discovery — %d tables across %d databases (%d failed)", tableCount, dbCount, len(failed)))
+		} else {
+			a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("ready — %d tables across %d databases", tableCount, dbCount))
+		}
 	}
 	a.refreshInstructions()
 
