@@ -40,8 +40,8 @@ func queryTool() mcp.Tool {
 
 func discoverTool() mcp.Tool {
 	return mcp.NewTool("discover",
-		mcp.WithDescription("Discover or refresh the schema for a configured database. Crawls tables, columns, constraints, indexes, views, and functions."),
-		mcp.WithString("database", mcp.Required(), mcp.Description("Name of the configured database to discover")),
+		mcp.WithDescription("Discover or refresh schema for configured databases. Crawls tables, columns, constraints, indexes, views, and functions. If database is omitted, discovers all configured databases."),
+		mcp.WithString("database", mcp.Description("Name of a specific database to discover (omit to discover all)")),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
@@ -231,31 +231,38 @@ func (a *App) enrichError(err error, dbName, sqlStr string) string {
 }
 
 func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	dbName, errResult := requireStringArg(request, "database")
-	if errResult != nil {
-		return errResult, nil
+	// If a specific database is provided, discover only that one.
+	// Otherwise, discover all configured databases.
+	dbName, _ := request.GetArguments()["database"].(string)
+
+	var targets []config.DatabaseConfig
+	if dbName != "" {
+		dbCfg, err := a.findDBConfig(dbName)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		targets = []config.DatabaseConfig{*dbCfg}
+	} else {
+		targets = a.cfg.Databases
 	}
 
-	dbCfg, err := a.findDBConfig(dbName)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	pool, err := a.pools.Get(dbName)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("discovering schema for %s...", dbName))
-
-	if err := postgres.Discover(ctx, pool, *dbCfg, a.store); err != nil {
-		a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovery failed for %s: %v", dbName, err))
-		return mcp.NewToolResultError(fmt.Sprintf("discovery failed: %v", err)), nil
+	var failed []string
+	for _, dbCfg := range targets {
+		pool, err := a.pools.Get(dbCfg.Name)
+		if err != nil {
+			failed = append(failed, fmt.Sprintf("%s: %v", dbCfg.Name, err))
+			continue
+		}
+		a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("discovering schema for %s...", dbCfg.Name))
+		if err := postgres.Discover(ctx, pool, dbCfg, a.store); err != nil {
+			a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovery failed for %s: %v", dbCfg.Name, err))
+			failed = append(failed, fmt.Sprintf("%s: %v", dbCfg.Name, err))
+		}
 	}
 
 	tableCount, err := a.store.CountTables()
 	if err != nil {
-		a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovered for %s but failed to count tables: %v", dbName, err))
+		a.sendLog(mcp.LoggingLevelWarning, "schema discovery complete but failed to count tables")
 	} else {
 		dbs, dbErr := a.store.ListDatabases()
 		dbCount := len(a.cfg.Databases)
@@ -266,7 +273,13 @@ func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (
 	}
 	a.refreshInstructions()
 
-	return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for database %q", dbName)), nil
+	if len(failed) > 0 {
+		return mcp.NewToolResultError(fmt.Sprintf("discovery failed for: %s", strings.Join(failed, "; "))), nil
+	}
+	if dbName != "" {
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for database %q", dbName)), nil
+	}
+	return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for %d databases", len(targets))), nil
 }
 
 func (a *App) handleListDatabases(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

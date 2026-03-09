@@ -67,6 +67,8 @@ func setupTestDB(t *testing.T) *pgxpool.Pool {
 		`CREATE TABLE test_hidden.secrets (id serial PRIMARY KEY, value text NOT NULL)`,
 		`CREATE TABLE test_hidden.audit_log (id serial PRIMARY KEY, secret_id int REFERENCES test_hidden.secrets(id), action text)`,
 		`CREATE INDEX idx_audit_secret ON test_hidden.audit_log(secret_id)`,
+		`CREATE VIEW test_hidden.secret_view AS SELECT value FROM test_hidden.secrets`,
+		`CREATE FUNCTION test_hidden.multiply(a int, b int) RETURNS int LANGUAGE sql AS 'SELECT a * b'`,
 		// NO GRANT — test_restricted_user cannot see test_hidden
 	}
 	for _, stmt := range setup {
@@ -189,6 +191,42 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 	}
 	if len(detail.ForeignKeys) == 0 {
 		t.Error("expected foreign keys for orders table")
+	}
+
+	// Verify views in visible schema
+	views, err := store.ListViews("testdb", "test_visible")
+	if err != nil {
+		t.Fatalf("ListViews(visible): %v", err)
+	}
+	if len(views) == 0 {
+		t.Error("expected views in test_visible schema")
+	}
+
+	// Verify NO views from hidden schema
+	hiddenViews, err := store.ListViews("testdb", "test_hidden")
+	if err != nil {
+		t.Fatalf("ListViews(hidden): %v", err)
+	}
+	if len(hiddenViews) > 0 {
+		t.Errorf("expected no views from hidden schema, got %d", len(hiddenViews))
+	}
+
+	// Verify functions in visible schema
+	funcs, err := store.ListFunctions("testdb", "test_visible")
+	if err != nil {
+		t.Fatalf("ListFunctions(visible): %v", err)
+	}
+	if len(funcs) == 0 {
+		t.Error("expected functions in test_visible schema")
+	}
+
+	// Verify NO functions from hidden schema
+	hiddenFuncs, err := store.ListFunctions("testdb", "test_hidden")
+	if err != nil {
+		t.Fatalf("ListFunctions(hidden): %v", err)
+	}
+	if len(hiddenFuncs) > 0 {
+		t.Errorf("expected no functions from hidden schema, got %d", len(hiddenFuncs))
 	}
 }
 

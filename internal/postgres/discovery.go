@@ -87,6 +87,7 @@ func discoverSchemas(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig
 	rows, err := tx.Query(ctx, `
 		SELECT schema_name FROM information_schema.schemata
 		WHERE schema_name NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
+		  AND has_schema_privilege(schema_name, 'USAGE')
 		ORDER BY schema_name`)
 	if err != nil {
 		return fmt.Errorf("querying schemas: %w", err)
@@ -153,13 +154,12 @@ func discoverColumns(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig
 			c.data_type,
 			c.is_nullable = 'YES' AS is_nullable,
 			c.column_default,
-			COALESCE(col_description(
-				(quote_ident(c.table_schema) || '.' || quote_ident(c.table_name))::regclass,
-				c.ordinal_position
-			), '') AS description
+			COALESCE(col_description(pc.oid, c.ordinal_position), '') AS description
 		FROM information_schema.columns c
 		JOIN information_schema.tables t
 			ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
+		LEFT JOIN pg_catalog.pg_namespace pn ON pn.nspname = c.table_schema
+		LEFT JOIN pg_catalog.pg_class pc ON pc.relname = c.table_name AND pc.relnamespace = pn.oid
 		WHERE c.table_schema NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		ORDER BY c.table_schema, c.table_name, c.ordinal_position`)
 	if err != nil {
@@ -313,10 +313,12 @@ func discoverViews(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, 
 			v.schemaname AS schema_name,
 			v.viewname AS view_name,
 			v.definition,
-			COALESCE(obj_description((quote_ident(v.schemaname) || '.' || quote_ident(v.viewname))::regclass), '') AS description
+			COALESCE(obj_description(c.oid), '') AS description
 		FROM pg_catalog.pg_views v
-		JOIN information_schema.schemata s ON s.schema_name = v.schemaname
+		JOIN pg_catalog.pg_namespace n ON n.nspname = v.schemaname
+		LEFT JOIN pg_catalog.pg_class c ON c.relname = v.viewname AND c.relnamespace = n.oid
 		WHERE v.schemaname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
+		  AND has_schema_privilege(v.schemaname, 'USAGE')
 		ORDER BY v.schemaname, v.viewname`)
 	if err != nil {
 		return fmt.Errorf("querying views: %w", err)
@@ -350,8 +352,8 @@ func discoverFunctions(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConf
 		FROM pg_catalog.pg_proc p
 		JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
 		JOIN pg_catalog.pg_language l ON l.oid = p.prolang
-		JOIN information_schema.schemata s ON s.schema_name = n.nspname
 		WHERE n.nspname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
+		  AND has_schema_privilege(n.nspname, 'USAGE')
 		  AND p.prokind IN ('f', 'w')
 		ORDER BY n.nspname, p.proname`)
 	if err != nil {
