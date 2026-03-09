@@ -222,6 +222,13 @@ func sanitizeFTSQuery(query string) string {
 	return strings.Join(tokens, " ")
 }
 
+// CountTables returns the total number of tables across all databases in the knowledge map.
+func (s *Store) CountTables() (int, error) {
+	var count int
+	err := s.db.Get(&count, "SELECT COUNT(*) FROM km_tables")
+	return count, err
+}
+
 func (s *Store) SearchSchema(query string) ([]SearchResult, error) {
 	sanitized := sanitizeFTSQuery(query)
 	if sanitized == "" {
