@@ -200,6 +200,8 @@ func discoverConstraints(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseCo
 		FROM pg_catalog.pg_constraint con
 		JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		JOIN information_schema.tables it
+		  ON it.table_schema = n.nspname AND it.table_name = c.relname AND it.table_type = 'BASE TABLE'
 		WHERE n.nspname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		  AND c.relkind <> 'm'
 		ORDER BY n.nspname, c.relname, con.conname`)
@@ -217,7 +219,7 @@ func discoverConstraints(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseCo
 			continue
 		}
 		if err := store.InsertConstraint(dbCfg.Name, con); err != nil {
-			return err
+			return fmt.Errorf("inserting constraint %q on %s.%s: %w", con.ConstraintName, con.SchemaName, con.TableName, err)
 		}
 	}
 	return rows.Err()
@@ -236,6 +238,8 @@ func discoverIndexes(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig
 		JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid
 		JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid
 		JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+		JOIN information_schema.tables it
+		  ON it.table_schema = n.nspname AND it.table_name = t.relname AND it.table_type = 'BASE TABLE'
 		WHERE n.nspname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		  AND t.relkind <> 'm'
 		ORDER BY n.nspname, t.relname, i.relname`)
@@ -253,7 +257,7 @@ func discoverIndexes(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig
 			continue
 		}
 		if err := store.InsertIndex(dbCfg.Name, idx); err != nil {
-			return err
+			return fmt.Errorf("inserting index %q on %s.%s: %w", idx.IndexName, idx.SchemaName, idx.TableName, err)
 		}
 	}
 	return rows.Err()
@@ -272,6 +276,8 @@ func discoverForeignKeys(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseCo
 		FROM pg_catalog.pg_constraint con
 		JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		JOIN information_schema.tables it
+		  ON it.table_schema = n.nspname AND it.table_name = c.relname AND it.table_type = 'BASE TABLE'
 		JOIN pg_catalog.pg_class rc ON rc.oid = con.confrelid
 		JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
 		CROSS JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS cols(conkey, confkey, ord)
@@ -295,7 +301,7 @@ func discoverForeignKeys(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseCo
 			continue
 		}
 		if err := store.InsertForeignKey(dbCfg.Name, fk); err != nil {
-			return err
+			return fmt.Errorf("inserting foreign key %q on %s.%s: %w", fk.ConstraintName, fk.SchemaName, fk.TableName, err)
 		}
 	}
 	return rows.Err()
@@ -309,6 +315,7 @@ func discoverViews(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConfig, 
 			v.definition,
 			COALESCE(obj_description((quote_ident(v.schemaname) || '.' || quote_ident(v.viewname))::regclass), '') AS description
 		FROM pg_catalog.pg_views v
+		JOIN information_schema.schemata s ON s.schema_name = v.schemaname
 		WHERE v.schemaname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		ORDER BY v.schemaname, v.viewname`)
 	if err != nil {
@@ -343,6 +350,7 @@ func discoverFunctions(ctx context.Context, tx pgx.Tx, dbCfg config.DatabaseConf
 		FROM pg_catalog.pg_proc p
 		JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
 		JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+		JOIN information_schema.schemata s ON s.schema_name = n.nspname
 		WHERE n.nspname NOT IN ('pg_toast', 'pg_catalog', 'information_schema')
 		  AND p.prokind IN ('f', 'w')
 		ORDER BY n.nspname, p.proname`)
