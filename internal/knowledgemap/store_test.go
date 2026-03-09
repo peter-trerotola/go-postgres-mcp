@@ -580,3 +580,48 @@ func TestListColumnsCompact_NonexistentDB(t *testing.T) {
 		t.Errorf("expected 0 columns, got %d", len(cols))
 	}
 }
+
+func TestCountTables_Empty(t *testing.T) {
+	store := openTestStore(t)
+
+	count, err := store.CountTables()
+	if err != nil {
+		t.Fatalf("CountTables: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 tables, got %d", count)
+	}
+}
+
+func TestCountTables_WithData(t *testing.T) {
+	store := openTestStore(t)
+	seedTestData(t, store)
+
+	count, err := store.CountTables()
+	if err != nil {
+		t.Fatalf("CountTables: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 tables, got %d", count)
+	}
+}
+
+func TestCountTables_MultipleDBs(t *testing.T) {
+	store := openTestStore(t)
+	seedTestData(t, store)
+
+	// Add another database with one table
+	store.InsertDatabase("db2", "h2", 5432, "d2")
+	store.InsertSchema("db2", "public")
+	store.InsertTable("db2", TableInfo{
+		SchemaName: "public", TableName: "products", TableType: "BASE TABLE",
+	})
+
+	count, err := store.CountTables()
+	if err != nil {
+		t.Fatalf("CountTables: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("expected 3 tables across 2 databases, got %d", count)
+	}
+}

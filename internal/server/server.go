@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
 	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
@@ -15,10 +16,13 @@ import (
 )
 
 type App struct {
-	cfg       *config.Config
-	pools     *postgres.PoolManager
-	store     *knowledgemap.Store
-	mcpServer *mcpserver.MCPServer
+	cfg             *config.Config
+	pools           *postgres.PoolManager
+	store           *knowledgemap.Store
+	mcpServer       *mcpserver.MCPServer
+	discoveryOnce   sync.Once
+	shutdownCtx     context.Context
+	shutdownCancel  context.CancelFunc
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -27,28 +31,39 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("opening knowledge map: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	app := &App{
+		cfg:            cfg,
+		pools:          postgres.NewPoolManager(),
+		store:          store,
+		shutdownCtx:    ctx,
+		shutdownCancel: cancel,
+	}
+
+	hooks := &mcpserver.Hooks{
+		OnAfterInitialize: []mcpserver.OnAfterInitializeFunc{
+			app.onAfterInitialize,
+		},
+	}
+
 	mcpSrv := mcpserver.NewMCPServer(
 		"go-postgres-mcp",
 		"1.0.0",
 		mcpserver.WithInstructions(baseInstructions),
 		mcpserver.WithResourceCapabilities(false, true),
+		mcpserver.WithLogging(),
+		mcpserver.WithHooks(hooks),
 	)
 
-	app := &App{
-		cfg:       cfg,
-		pools:     postgres.NewPoolManager(),
-		store:     store,
-		mcpServer: mcpSrv,
-	}
-
+	app.mcpServer = mcpSrv
 	app.registerTools()
 	app.registerResources()
 	return app, nil
 }
 
-// Start connects to all databases and optionally runs auto-discovery.
-// Connections are established sequentially (required before discovery),
-// then discovery runs concurrently across all databases.
+// Start connects to all configured databases. Discovery is deferred
+// to the OnAfterInitialize hook so the MCP server can respond to the
+// initialize request immediately rather than blocking on schema crawl.
 func (a *App) Start(ctx context.Context) error {
 	for _, dbCfg := range a.cfg.Databases {
 		log.Printf("connecting to database %q at %s:%d/%s", dbCfg.Name, dbCfg.Host, dbCfg.Port, dbCfg.Database)
@@ -57,32 +72,82 @@ func (a *App) Start(ctx context.Context) error {
 		}
 		log.Printf("connected to database %q", dbCfg.Name)
 	}
-
-	if a.cfg.KnowledgeMap.AutoDiscoverOnStartup {
-		var wg sync.WaitGroup
-		for _, dbCfg := range a.cfg.Databases {
-			pool, err := a.pools.Get(dbCfg.Name)
-			if err != nil {
-				log.Printf("warning: auto-discovery skipped for %q: failed to get pool: %v", dbCfg.Name, err)
-				continue
-			}
-			wg.Add(1)
-			go func(pool *pgxpool.Pool, dbCfg config.DatabaseConfig) {
-				defer wg.Done()
-				log.Printf("auto-discovering schema for %q", dbCfg.Name)
-				if err := postgres.Discover(ctx, pool, dbCfg, a.store); err != nil {
-					log.Printf("warning: auto-discovery failed for %q: %v", dbCfg.Name, err)
-				} else {
-					log.Printf("auto-discovery complete for %q", dbCfg.Name)
-				}
-			}(pool, dbCfg)
-		}
-		wg.Wait()
-	}
 	// Always refresh instructions — even without auto-discovery, the knowledge
 	// map may contain previously-discovered schema from a prior run.
 	a.refreshInstructions()
 	return nil
+}
+
+// onAfterInitialize is called after the MCP initialize handshake completes.
+// It triggers auto-discovery in a background goroutine so that MCP message
+// processing is not blocked. Uses sync.Once to ensure discovery runs at most
+// once, even if the hook fires multiple times (e.g. reconnects).
+func (a *App) onAfterInitialize(_ context.Context, _ any, _ *mcp.InitializeRequest, _ *mcp.InitializeResult) {
+	if !a.cfg.KnowledgeMap.AutoDiscoverOnStartup {
+		return
+	}
+
+	a.discoveryOnce.Do(func() {
+		go a.runAutoDiscovery(a.shutdownCtx)
+	})
+}
+
+// runAutoDiscovery discovers schemas for all configured databases concurrently
+// and sends MCP logging notifications to report progress. The context should
+// be tied to the server lifecycle so discovery stops on shutdown.
+func (a *App) runAutoDiscovery(ctx context.Context) {
+	var wg sync.WaitGroup
+	for _, dbCfg := range a.cfg.Databases {
+		pool, err := a.pools.Get(dbCfg.Name)
+		if err != nil {
+			log.Printf("warning: auto-discovery skipped for %q: failed to get pool: %v", dbCfg.Name, err)
+			continue
+		}
+		wg.Add(1)
+		go func(pool *pgxpool.Pool, dbCfg config.DatabaseConfig) {
+			defer wg.Done()
+			a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("discovering schema for %s...", dbCfg.Name))
+			log.Printf("auto-discovering schema for %q", dbCfg.Name)
+			if err := postgres.Discover(ctx, pool, dbCfg, a.store); err != nil {
+				log.Printf("warning: auto-discovery failed for %q: %v", dbCfg.Name, err)
+				a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovery failed for %s: %v", dbCfg.Name, err))
+			} else {
+				log.Printf("auto-discovery complete for %q", dbCfg.Name)
+			}
+		}(pool, dbCfg)
+	}
+	wg.Wait()
+
+	// Refresh instructions with newly discovered schema
+	a.refreshInstructions()
+
+	// Report summary using actual discovered counts from the knowledge map
+	tableCount, err := a.store.CountTables()
+	if err != nil {
+		log.Printf("warning: failed to count tables: %v", err)
+		a.sendLog(mcp.LoggingLevelWarning, "schema discovery complete but failed to count tables")
+		return
+	}
+	dbs, dbErr := a.store.ListDatabases()
+	dbCount := len(a.cfg.Databases)
+	if dbErr == nil {
+		dbCount = len(dbs)
+	}
+	summary := fmt.Sprintf("ready — %d tables across %d databases", tableCount, dbCount)
+	a.sendLog(mcp.LoggingLevelInfo, summary)
+	log.Printf("auto-discovery complete: %s", summary)
+}
+
+// sendLog sends a logging notification to all connected MCP clients.
+func (a *App) sendLog(level mcp.LoggingLevel, message string) {
+	a.mcpServer.SendNotificationToAllClients(
+		"notifications/message",
+		map[string]any{
+			"level":  level,
+			"logger": "go-postgres-mcp",
+			"data":   message,
+		},
+	)
 }
 
 // ServeStdio starts the MCP server over stdio transport.
@@ -90,8 +155,11 @@ func (a *App) ServeStdio() error {
 	return mcpserver.ServeStdio(a.mcpServer)
 }
 
-// Shutdown cleans up resources.
+// Shutdown cleans up resources and cancels any in-progress discovery.
 func (a *App) Shutdown() {
+	if a.shutdownCancel != nil {
+		a.shutdownCancel()
+	}
 	a.pools.Close()
 	if a.store != nil {
 		a.store.Close()

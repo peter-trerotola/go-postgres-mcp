@@ -246,10 +246,24 @@ func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("discovering schema for %s...", dbName))
+
 	if err := postgres.Discover(ctx, pool, *dbCfg, a.store); err != nil {
+		a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovery failed for %s: %v", dbName, err))
 		return mcp.NewToolResultError(fmt.Sprintf("discovery failed: %v", err)), nil
 	}
 
+	tableCount, err := a.store.CountTables()
+	if err != nil {
+		a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovered for %s but failed to count tables: %v", dbName, err))
+	} else {
+		dbs, dbErr := a.store.ListDatabases()
+		dbCount := len(a.cfg.Databases)
+		if dbErr == nil {
+			dbCount = len(dbs)
+		}
+		a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("ready — %d tables across %d databases", tableCount, dbCount))
+	}
 	a.refreshInstructions()
 
 	return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for database %q", dbName)), nil
