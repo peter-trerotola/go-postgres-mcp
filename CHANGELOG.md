@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.14.0...v1.15.0) (2026-03-09)
+
+
+### Features
+
+* add MCP logging notifications for startup progress ([#83](https://github.com/peter-trerotola/go-postgres-mcp/issues/83)) ([edf7f56](https://github.com/peter-trerotola/go-postgres-mcp/commit/edf7f56743146f4de37f526b33d2f466be1838bc))
+
 ## [1.14.0](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.13.0...v1.14.0) (2026-03-09)
 
 
