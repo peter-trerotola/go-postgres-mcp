@@ -595,8 +595,14 @@ func TestRefreshInstructions_EmptyStoreKeepsBaseOnly(t *testing.T) {
 	}
 
 	response := mcpSrv.HandleMessage(context.Background(), reqBytes)
-	resp := response.(mcp.JSONRPCResponse)
-	initResult := resp.Result.(mcp.InitializeResult)
+	resp, ok := response.(mcp.JSONRPCResponse)
+	if !ok {
+		t.Fatalf("expected JSONRPCResponse, got %T", response)
+	}
+	initResult, ok := resp.Result.(mcp.InitializeResult)
+	if !ok {
+		t.Fatalf("expected InitializeResult, got %T", resp.Result)
+	}
 
 	if initResult.Instructions != baseInstructions {
 		t.Errorf("expected only base instructions, got %q", initResult.Instructions)
