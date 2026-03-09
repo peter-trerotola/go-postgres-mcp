@@ -7,21 +7,21 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ```
-   .------------------------------------------------------.
-   | what time of day do users sign up most often?          |
-   '----.--------------------------------------------------'
-        |
-     ,_---~~~~~----._                ____  ______  ___
-  _,,_,*^____    ___``*g*\"*,      /    )/      \/   \
- / __/ /'    ^. /     \ ^@q  f   (     / __    _\    )
-[  @f | @))   || @))   l 0 _/     \    (/ o)  ( o)   )
- \`/   \~___ / _ \____/   \        \_  (_  )   \ )  /
-  |          _l_l_         I          \  /\_/    \)_/
-  }         [_____]        I           \/  //|  |\
-  ]           | | |        |               v |  | v
-  ]            ~ ~         |                 \__/
-  |                        |
-   |                       |
+                           .-------------------------.
+                           | how many signups today? |
+                           '--.----------------------'
+                              |
+   ____  ______  ___          ,_---~~~~~----._
+  /    )/      \/   \      _,,_,*^____    ___``*g*\"*,
+ (     / __    _\    )    / __/ /'    ^. /     \ ^@q  f
+  \    (/ o)  ( o)   )   [  @f | @))   || @))   l 0 _/
+   \_  (_  )   \ )  /     \`/   \~___ / _ \____/   \
+     \  /\_/    \)_/        |          _l_l_         I
+      \/  //|  |\           }         [_____]        I
+          v |  | v          ]           | | |        |
+            \__/            ]            ~ ~         |
+                            |                        |
+                             |                       |
 ```
 
 A Go-based [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that provides **read-only** access to PostgreSQL databases. Designed for use with Claude Desktop, Claude Code, and other MCP-compatible clients.
