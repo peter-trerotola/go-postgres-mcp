@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,16 +30,7 @@ func New(cfg *config.Config) (*App, error) {
 	mcpSrv := mcpserver.NewMCPServer(
 		"go-postgres-mcp",
 		"1.0.0",
-		mcpserver.WithInstructions(`This server provides read-only access to PostgreSQL databases.
-
-Workflow:
-1. Use list_databases to see available databases.
-2. Use list_tables or describe_table to understand schema BEFORE writing queries.
-3. Use query to execute read-only SELECT statements.
-
-Query results include a schema_context field with column names and types for all referenced tables. Use this to verify column names in follow-up queries.
-
-If a query fails with a column or table error, check the schema hint in the error message for correct names.`),
+		mcpserver.WithInstructions(baseInstructions),
 		mcpserver.WithResourceCapabilities(false, true),
 	)
 
@@ -86,6 +78,7 @@ func (a *App) Start(ctx context.Context) error {
 			}(pool, dbCfg)
 		}
 		wg.Wait()
+		a.refreshInstructions()
 	}
 	return nil
 }
@@ -106,4 +99,81 @@ func (a *App) Shutdown() {
 // MCPServer returns the underlying MCP server for testing.
 func (a *App) MCPServer() *mcpserver.MCPServer {
 	return a.mcpServer
+}
+
+// baseInstructions is the static portion of the MCP server instructions.
+const baseInstructions = `This server provides read-only access to PostgreSQL databases.
+
+Workflow:
+1. Use list_databases to see available databases.
+2. Use list_tables or describe_table to understand schema BEFORE writing queries.
+3. Use query to execute read-only SELECT statements.
+
+Query results include a schema_context field with column names and types for all referenced tables. Use this to verify column names in follow-up queries.
+
+If a query fails with a column or table error, check the schema hint in the error message for correct names.`
+
+// refreshInstructions rebuilds the MCP server instructions with a compact
+// schema summary from the knowledge map. This gives the LLM upfront knowledge
+// of every table and column without requiring extra tool calls.
+func (a *App) refreshInstructions() {
+	summary := a.buildSchemaSummary()
+	instructions := baseInstructions
+	if summary != "" {
+		instructions += "\n\n" + summary
+	}
+	// Apply the WithInstructions option to update the unexported field.
+	mcpserver.WithInstructions(instructions)(a.mcpServer)
+	log.Printf("server instructions refreshed (%d bytes)", len(instructions))
+}
+
+// buildSchemaSummary generates a compact text summary of all discovered schemas,
+// tables, and columns from the knowledge map. Format:
+//
+//	Schema:
+//	[dbname] schema.table: col1 (type), col2 (type), ...
+func (a *App) buildSchemaSummary() string {
+	dbs, err := a.store.ListDatabases()
+	if err != nil || len(dbs) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("Schema:")
+
+	for _, db := range dbs {
+		schemas, err := a.store.ListSchemas(db.Name)
+		if err != nil {
+			continue
+		}
+		for _, schema := range schemas {
+			tables, err := a.store.ListTables(db.Name, schema.SchemaName)
+			if err != nil {
+				continue
+			}
+			for _, table := range tables {
+				cols, err := a.store.ListColumnsCompact(db.Name, schema.SchemaName, table.TableName)
+				if err != nil {
+					continue
+				}
+				parts := make([]string, len(cols))
+				for i, c := range cols {
+					parts[i] = c.Column + " (" + c.Type + ")"
+				}
+				b.WriteString("\n[")
+				b.WriteString(db.Name)
+				b.WriteString("] ")
+				b.WriteString(schema.SchemaName)
+				b.WriteString(".")
+				b.WriteString(table.TableName)
+				b.WriteString(": ")
+				b.WriteString(strings.Join(parts, ", "))
+			}
+		}
+	}
+
+	if b.Len() <= len("Schema:") {
+		return ""
+	}
+	return b.String()
 }

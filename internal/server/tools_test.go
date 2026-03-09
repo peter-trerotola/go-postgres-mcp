@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -423,5 +425,180 @@ func TestCheckTableFilter_NilConfigAllowsAll(t *testing.T) {
 	app := newTestApp(t) // no cfg set
 	if err := app.checkTableFilter("testdb", "SELECT * FROM anything"); err != nil {
 		t.Errorf("expected allowed with nil config, got: %v", err)
+	}
+}
+
+// --- Schema Summary / Dynamic Instructions Tests ---
+
+func TestBuildSchemaSummary_WithData(t *testing.T) {
+	app := newTestApp(t)
+	summary := app.buildSchemaSummary()
+
+	if summary == "" {
+		t.Fatal("expected non-empty schema summary")
+	}
+	if !strings.Contains(summary, "Schema:") {
+		t.Error("expected 'Schema:' header")
+	}
+	if !strings.Contains(summary, "[testdb] public.users:") {
+		t.Error("expected '[testdb] public.users:' line")
+	}
+	if !strings.Contains(summary, "id (integer)") {
+		t.Error("expected 'id (integer)' in summary")
+	}
+	if !strings.Contains(summary, "name (text)") {
+		t.Error("expected 'name (text)' in summary")
+	}
+}
+
+func TestBuildSchemaSummary_EmptyStore(t *testing.T) {
+	store, err := knowledgemap.Open(filepath.Join(t.TempDir(), "empty.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	app := &App{
+		store:     store,
+		mcpServer: mcpserver.NewMCPServer("test", "0.0.0"),
+	}
+	summary := app.buildSchemaSummary()
+	if summary != "" {
+		t.Errorf("expected empty summary for empty store, got %q", summary)
+	}
+}
+
+func TestBuildSchemaSummary_MultipleTables(t *testing.T) {
+	app := newTestApp(t)
+
+	// Add a second table
+	if err := app.store.InsertTable("testdb", knowledgemap.TableInfo{
+		SchemaName: "public", TableName: "orders", TableType: "BASE TABLE",
+	}); err != nil {
+		t.Fatalf("seed table: %v", err)
+	}
+	if err := app.store.InsertColumn("testdb", knowledgemap.ColumnInfo{
+		SchemaName: "public", TableName: "orders", ColumnName: "order_id",
+		Ordinal: 1, DataType: "uuid",
+	}); err != nil {
+		t.Fatalf("seed column: %v", err)
+	}
+	if err := app.store.InsertColumn("testdb", knowledgemap.ColumnInfo{
+		SchemaName: "public", TableName: "orders", ColumnName: "total",
+		Ordinal: 2, DataType: "numeric",
+	}); err != nil {
+		t.Fatalf("seed column: %v", err)
+	}
+
+	summary := app.buildSchemaSummary()
+	if !strings.Contains(summary, "[testdb] public.users:") {
+		t.Error("expected users table in summary")
+	}
+	if !strings.Contains(summary, "[testdb] public.orders:") {
+		t.Error("expected orders table in summary")
+	}
+	if !strings.Contains(summary, "order_id (uuid)") {
+		t.Error("expected order_id column in summary")
+	}
+	if !strings.Contains(summary, "total (numeric)") {
+		t.Error("expected total column in summary")
+	}
+}
+
+func TestBuildSchemaSummary_MultipleDBs(t *testing.T) {
+	app := newTestApp(t)
+
+	// Add a second database
+	if err := app.store.InsertDatabase("analytics", "localhost", 5433, "analytics_db"); err != nil {
+		t.Fatalf("seed database: %v", err)
+	}
+	if err := app.store.InsertSchema("analytics", "reporting"); err != nil {
+		t.Fatalf("seed schema: %v", err)
+	}
+	if err := app.store.InsertTable("analytics", knowledgemap.TableInfo{
+		SchemaName: "reporting", TableName: "events", TableType: "BASE TABLE",
+	}); err != nil {
+		t.Fatalf("seed table: %v", err)
+	}
+	if err := app.store.InsertColumn("analytics", knowledgemap.ColumnInfo{
+		SchemaName: "reporting", TableName: "events", ColumnName: "event_type",
+		Ordinal: 1, DataType: "text",
+	}); err != nil {
+		t.Fatalf("seed column: %v", err)
+	}
+
+	summary := app.buildSchemaSummary()
+	if !strings.Contains(summary, "[analytics] reporting.events:") {
+		t.Error("expected analytics database in summary")
+	}
+	if !strings.Contains(summary, "[testdb] public.users:") {
+		t.Error("expected testdb in summary")
+	}
+}
+
+func TestRefreshInstructions_UpdatesMCPServer(t *testing.T) {
+	app := newTestApp(t)
+	app.refreshInstructions()
+
+	// Verify instructions were updated by sending an initialize request
+	initReq := mcp.JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      mcp.NewRequestId(int64(1)),
+		Request: mcp.Request{Method: "initialize"},
+	}
+	reqBytes, err := json.Marshal(initReq)
+	if err != nil {
+		t.Fatalf("marshal init request: %v", err)
+	}
+
+	response := app.mcpServer.HandleMessage(context.Background(), reqBytes)
+	resp, ok := response.(mcp.JSONRPCResponse)
+	if !ok {
+		t.Fatalf("expected JSONRPCResponse, got %T", response)
+	}
+	initResult, ok := resp.Result.(mcp.InitializeResult)
+	if !ok {
+		t.Fatalf("expected InitializeResult, got %T", resp.Result)
+	}
+
+	if !strings.Contains(initResult.Instructions, baseInstructions) {
+		t.Error("expected base instructions in MCP server instructions")
+	}
+	if !strings.Contains(initResult.Instructions, "[testdb] public.users:") {
+		t.Error("expected schema summary in MCP server instructions")
+	}
+	if !strings.Contains(initResult.Instructions, "id (integer)") {
+		t.Error("expected column details in MCP server instructions")
+	}
+}
+
+func TestRefreshInstructions_EmptyStoreKeepsBaseOnly(t *testing.T) {
+	store, err := knowledgemap.Open(filepath.Join(t.TempDir(), "empty.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	mcpSrv := mcpserver.NewMCPServer("test", "0.0.0")
+	app := &App{store: store, mcpServer: mcpSrv}
+	app.refreshInstructions()
+
+	// Verify instructions are just the base (no schema appendix)
+	initReq := mcp.JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      mcp.NewRequestId(int64(1)),
+		Request: mcp.Request{Method: "initialize"},
+	}
+	reqBytes, err := json.Marshal(initReq)
+	if err != nil {
+		t.Fatalf("marshal init request: %v", err)
+	}
+
+	response := mcpSrv.HandleMessage(context.Background(), reqBytes)
+	resp := response.(mcp.JSONRPCResponse)
+	initResult := resp.Result.(mcp.InitializeResult)
+
+	if initResult.Instructions != baseInstructions {
+		t.Errorf("expected only base instructions, got %q", initResult.Instructions)
 	}
 }

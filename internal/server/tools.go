@@ -250,6 +250,8 @@ func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (
 		return mcp.NewToolResultError(fmt.Sprintf("discovery failed: %v", err)), nil
 	}
 
+	a.refreshInstructions()
+
 	return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for database %q", dbName)), nil
 }
 
