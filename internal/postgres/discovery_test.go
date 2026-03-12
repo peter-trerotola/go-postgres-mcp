@@ -132,7 +132,15 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 		t.Fatalf("Discover failed (this was the FK constraint bug): %v", err)
 	}
 
-	// Verify visible schema was discovered
+	t.Run("schemas", func(t *testing.T) { verifyDiscoveredSchemas(t, store) })
+	t.Run("tables", func(t *testing.T) { verifyDiscoveredTables(t, store) })
+	t.Run("describe", func(t *testing.T) { verifyDescribeTable(t, store) })
+	t.Run("views", func(t *testing.T) { verifyDiscoveredViews(t, store) })
+	t.Run("functions", func(t *testing.T) { verifyDiscoveredFunctions(t, store) })
+}
+
+func verifyDiscoveredSchemas(t *testing.T, store *knowledgemap.Store) {
+	t.Helper()
 	schemas, err := store.ListSchemas("testdb")
 	if err != nil {
 		t.Fatalf("ListSchemas: %v", err)
@@ -152,8 +160,10 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 	if foundHidden {
 		t.Error("test_hidden schema should NOT be discovered (user has no access)")
 	}
+}
 
-	// Verify tables in visible schema
+func verifyDiscoveredTables(t *testing.T, store *knowledgemap.Store) {
+	t.Helper()
 	tables, err := store.ListTables("testdb", "test_visible")
 	if err != nil {
 		t.Fatalf("ListTables: %v", err)
@@ -166,7 +176,6 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 		t.Errorf("expected users and orders tables, got %v", tableNames)
 	}
 
-	// Verify NO tables from hidden schema
 	hiddenTables, err := store.ListTables("testdb", "test_hidden")
 	if err != nil {
 		t.Fatalf("ListTables(hidden): %v", err)
@@ -174,8 +183,10 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 	if len(hiddenTables) > 0 {
 		t.Errorf("expected no tables from hidden schema, got %d", len(hiddenTables))
 	}
+}
 
-	// Verify describe_table works for visible tables (columns, constraints, indexes)
+func verifyDescribeTable(t *testing.T, store *knowledgemap.Store) {
+	t.Helper()
 	detail, err := store.DescribeTable("testdb", "test_visible", "orders")
 	if err != nil {
 		t.Fatalf("DescribeTable: %v", err)
@@ -192,8 +203,10 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 	if len(detail.ForeignKeys) == 0 {
 		t.Error("expected foreign keys for orders table")
 	}
+}
 
-	// Verify views in visible schema
+func verifyDiscoveredViews(t *testing.T, store *knowledgemap.Store) {
+	t.Helper()
 	views, err := store.ListViews("testdb", "test_visible")
 	if err != nil {
 		t.Fatalf("ListViews(visible): %v", err)
@@ -202,7 +215,6 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 		t.Error("expected views in test_visible schema")
 	}
 
-	// Verify NO views from hidden schema
 	hiddenViews, err := store.ListViews("testdb", "test_hidden")
 	if err != nil {
 		t.Fatalf("ListViews(hidden): %v", err)
@@ -210,8 +222,10 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 	if len(hiddenViews) > 0 {
 		t.Errorf("expected no views from hidden schema, got %d", len(hiddenViews))
 	}
+}
 
-	// Verify functions in visible schema
+func verifyDiscoveredFunctions(t *testing.T, store *knowledgemap.Store) {
+	t.Helper()
 	funcs, err := store.ListFunctions("testdb", "test_visible")
 	if err != nil {
 		t.Fatalf("ListFunctions(visible): %v", err)
@@ -220,7 +234,6 @@ func TestDiscover_PartialSchemaAccess(t *testing.T) {
 		t.Error("expected functions in test_visible schema")
 	}
 
-	// Verify NO functions from hidden schema
 	hiddenFuncs, err := store.ListFunctions("testdb", "test_hidden")
 	if err != nil {
 		t.Fatalf("ListFunctions(hidden): %v", err)
