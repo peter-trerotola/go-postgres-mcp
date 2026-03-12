@@ -154,49 +154,8 @@ func (c *Config) validate() error {
 
 	names := make(map[string]bool)
 	for i, db := range c.Databases {
-		if db.Name == "" {
-			return fmt.Errorf("database[%d]: name is required", i)
-		}
-		if names[db.Name] {
-			return fmt.Errorf("duplicate database name: %q", db.Name)
-		}
-		names[db.Name] = true
-
-		if db.Host == "" {
-			return fmt.Errorf("database %q: host is required", db.Name)
-		}
-		if db.Database == "" {
-			return fmt.Errorf("database %q: database is required", db.Name)
-		}
-		if db.User == "" {
-			return fmt.Errorf("database %q: user is required", db.Name)
-		}
-		if db.PasswordEnv == "" {
-			return fmt.Errorf("database %q: password_env is required", db.Name)
-		}
-
-		// Validate schema names
-		for j, s := range db.Schemas {
-			if strings.TrimSpace(s) == "" {
-				return fmt.Errorf("database %q: schemas[%d] is empty", db.Name, j)
-			}
-		}
-
-		// Include and exclude are mutually exclusive
-		if len(db.Tables.Include) > 0 && len(db.Tables.Exclude) > 0 {
-			return fmt.Errorf("database %q: tables.include and tables.exclude are mutually exclusive", db.Name)
-		}
-
-		// Validate table entries are in schema.table format
-		for j, t := range db.Tables.Include {
-			if !strings.Contains(t, ".") {
-				return fmt.Errorf("database %q: tables.include[%d] %q must be in schema.table format", db.Name, j, t)
-			}
-		}
-		for j, t := range db.Tables.Exclude {
-			if !strings.Contains(t, ".") {
-				return fmt.Errorf("database %q: tables.exclude[%d] %q must be in schema.table format", db.Name, j, t)
-			}
+		if err := db.validate(i, names); err != nil {
+			return err
 		}
 	}
 
@@ -204,6 +163,54 @@ func (c *Config) validate() error {
 		c.KnowledgeMap.Path = defaultKnowledgeMapPath()
 	}
 
+	return nil
+}
+
+func (d *DatabaseConfig) validate(index int, names map[string]bool) error {
+	if d.Name == "" {
+		return fmt.Errorf("database[%d]: name is required", index)
+	}
+	if names[d.Name] {
+		return fmt.Errorf("duplicate database name: %q", d.Name)
+	}
+	names[d.Name] = true
+
+	if d.Host == "" {
+		return fmt.Errorf("database %q: host is required", d.Name)
+	}
+	if d.Database == "" {
+		return fmt.Errorf("database %q: database is required", d.Name)
+	}
+	if d.User == "" {
+		return fmt.Errorf("database %q: user is required", d.Name)
+	}
+	if d.PasswordEnv == "" {
+		return fmt.Errorf("database %q: password_env is required", d.Name)
+	}
+
+	// Validate schema names
+	for j, s := range d.Schemas {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("database %q: schemas[%d] is empty", d.Name, j)
+		}
+	}
+
+	// Include and exclude are mutually exclusive
+	if len(d.Tables.Include) > 0 && len(d.Tables.Exclude) > 0 {
+		return fmt.Errorf("database %q: tables.include and tables.exclude are mutually exclusive", d.Name)
+	}
+
+	// Validate table entries are in schema.table format
+	for j, t := range d.Tables.Include {
+		if !strings.Contains(t, ".") {
+			return fmt.Errorf("database %q: tables.include[%d] %q must be in schema.table format", d.Name, j, t)
+		}
+	}
+	for j, t := range d.Tables.Exclude {
+		if !strings.Contains(t, ".") {
+			return fmt.Errorf("database %q: tables.exclude[%d] %q must be in schema.table format", d.Name, j, t)
+		}
+	}
 	return nil
 }
 

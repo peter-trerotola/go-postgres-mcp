@@ -16,13 +16,13 @@ import (
 )
 
 type App struct {
-	cfg             *config.Config
-	pools           *postgres.PoolManager
-	store           *knowledgemap.Store
-	mcpServer       *mcpserver.MCPServer
-	discoveryOnce   sync.Once
-	shutdownCtx     context.Context
-	shutdownCancel  context.CancelFunc
+	cfg            *config.Config
+	pools          *postgres.PoolManager
+	store          *knowledgemap.Store
+	mcpServer      *mcpserver.MCPServer
+	discoveryOnce  sync.Once
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
 }
 
 func New(cfg *config.Config) (*App, error) {

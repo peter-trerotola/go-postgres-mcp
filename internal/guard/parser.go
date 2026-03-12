@@ -336,28 +336,8 @@ func checkSelectStmt(sel *pg_query.SelectStmt) error {
 	}
 
 	// Check CTEs (WITH clauses) for mutations
-	if sel.WithClause != nil {
-		for _, cte := range sel.WithClause.Ctes {
-			if cte == nil {
-				continue
-			}
-			cteExpr, ok := cte.Node.(*pg_query.Node_CommonTableExpr)
-			if !ok || cteExpr.CommonTableExpr == nil {
-				continue
-			}
-			innerQuery := cteExpr.CommonTableExpr.Ctequery
-			if innerQuery == nil {
-				continue
-			}
-			switch inner := innerQuery.Node.(type) {
-			case *pg_query.Node_SelectStmt:
-				if err := checkSelectStmt(inner.SelectStmt); err != nil {
-					return err
-				}
-			default:
-				return &ForbiddenError{Reason: "CTE contains a non-SELECT statement"}
-			}
-		}
+	if err := checkCTEs(sel.WithClause); err != nil {
+		return err
 	}
 
 	// Recursively check subqueries in set operations (UNION, INTERSECT, EXCEPT)
@@ -372,5 +352,34 @@ func checkSelectStmt(sel *pg_query.SelectStmt) error {
 		}
 	}
 
+	return nil
+}
+
+// checkCTEs validates that all CTEs in a WITH clause contain only SELECT statements.
+func checkCTEs(wc *pg_query.WithClause) error {
+	if wc == nil {
+		return nil
+	}
+	for _, cte := range wc.Ctes {
+		if cte == nil {
+			continue
+		}
+		cteExpr, ok := cte.Node.(*pg_query.Node_CommonTableExpr)
+		if !ok || cteExpr.CommonTableExpr == nil {
+			continue
+		}
+		innerQuery := cteExpr.CommonTableExpr.Ctequery
+		if innerQuery == nil {
+			continue
+		}
+		switch inner := innerQuery.Node.(type) {
+		case *pg_query.Node_SelectStmt:
+			if err := checkSelectStmt(inner.SelectStmt); err != nil {
+				return err
+			}
+		default:
+			return &ForbiddenError{Reason: "CTE contains a non-SELECT statement"}
+		}
+	}
 	return nil
 }
