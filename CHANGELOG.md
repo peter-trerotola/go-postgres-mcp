@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.4](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.16.3...v1.16.4) (2026-03-12)
+
+
+### Bug Fixes
+
+* reduce remaining gocyclo complexity and add CI lint job ([#93](https://github.com/peter-trerotola/go-postgres-mcp/issues/93)) ([ce58c25](https://github.com/peter-trerotola/go-postgres-mcp/commit/ce58c25e0b741b605a0f9531378a482e6250b340))
+
 ## [1.16.3](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.16.2...v1.16.3) (2026-03-12)
 
 
