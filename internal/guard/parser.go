@@ -148,87 +148,90 @@ func walkNodeForSubqueries(node *pg_query.Node, seen map[TableRef]struct{}, refs
 		return
 	}
 
-	switch n := node.Node.(type) {
-	case *pg_query.Node_SubLink:
-		if n.SubLink != nil && n.SubLink.Subselect != nil {
+	// Handle SubLink specially — it contains a subselect to collect from.
+	if n, ok := node.Node.(*pg_query.Node_SubLink); ok && n.SubLink != nil {
+		if n.SubLink.Subselect != nil {
 			if sel, ok := n.SubLink.Subselect.Node.(*pg_query.Node_SelectStmt); ok {
 				collectFromSelect(sel.SelectStmt, seen, refs, cteNames)
 			}
 		}
 		// Also walk the test expression (left side of IN, ANY, etc.)
-		if n.SubLink != nil {
-			walkNodeForSubqueries(n.SubLink.Testexpr, seen, refs, cteNames)
-		}
+		walkNodeForSubqueries(n.SubLink.Testexpr, seen, refs, cteNames)
+		return
+	}
 
+	// For all other expression nodes, collect children and recurse.
+	for _, child := range exprChildren(node) {
+		walkNodeForSubqueries(child, seen, refs, cteNames)
+	}
+}
+
+// exprChildren returns child nodes of an expression node that may contain
+// subqueries. Returns nil for unrecognised node types.
+func exprChildren(node *pg_query.Node) []*pg_query.Node {
+	if children := compoundExprChildren(node); children != nil {
+		return children
+	}
+	return scalarExprChildren(node)
+}
+
+// compoundExprChildren handles expression nodes with multiple children.
+func compoundExprChildren(node *pg_query.Node) []*pg_query.Node {
+	switch n := node.Node.(type) {
 	case *pg_query.Node_BoolExpr:
 		if n.BoolExpr != nil {
-			for _, arg := range n.BoolExpr.Args {
-				walkNodeForSubqueries(arg, seen, refs, cteNames)
-			}
+			return n.BoolExpr.Args
 		}
-
 	case *pg_query.Node_AExpr:
 		if n.AExpr != nil {
-			walkNodeForSubqueries(n.AExpr.Lexpr, seen, refs, cteNames)
-			walkNodeForSubqueries(n.AExpr.Rexpr, seen, refs, cteNames)
+			return []*pg_query.Node{n.AExpr.Lexpr, n.AExpr.Rexpr}
 		}
-
 	case *pg_query.Node_FuncCall:
 		if n.FuncCall != nil {
-			for _, arg := range n.FuncCall.Args {
-				walkNodeForSubqueries(arg, seen, refs, cteNames)
-			}
+			return n.FuncCall.Args
 		}
-
 	case *pg_query.Node_CaseExpr:
 		if n.CaseExpr != nil {
-			walkNodeForSubqueries(n.CaseExpr.Arg, seen, refs, cteNames)
-			for _, w := range n.CaseExpr.Args {
-				walkNodeForSubqueries(w, seen, refs, cteNames)
-			}
-			walkNodeForSubqueries(n.CaseExpr.Defresult, seen, refs, cteNames)
+			children := []*pg_query.Node{n.CaseExpr.Arg, n.CaseExpr.Defresult}
+			return append(children, n.CaseExpr.Args...)
 		}
-
 	case *pg_query.Node_CaseWhen:
 		if n.CaseWhen != nil {
-			walkNodeForSubqueries(n.CaseWhen.Expr, seen, refs, cteNames)
-			walkNodeForSubqueries(n.CaseWhen.Result, seen, refs, cteNames)
+			return []*pg_query.Node{n.CaseWhen.Expr, n.CaseWhen.Result}
 		}
-
 	case *pg_query.Node_CoalesceExpr:
 		if n.CoalesceExpr != nil {
-			for _, arg := range n.CoalesceExpr.Args {
-				walkNodeForSubqueries(arg, seen, refs, cteNames)
-			}
+			return n.CoalesceExpr.Args
 		}
-
-	case *pg_query.Node_ResTarget:
-		if n.ResTarget != nil {
-			walkNodeForSubqueries(n.ResTarget.Val, seen, refs, cteNames)
-		}
-
-	case *pg_query.Node_TypeCast:
-		if n.TypeCast != nil {
-			walkNodeForSubqueries(n.TypeCast.Arg, seen, refs, cteNames)
-		}
-
-	case *pg_query.Node_NullTest:
-		if n.NullTest != nil {
-			walkNodeForSubqueries(n.NullTest.Arg, seen, refs, cteNames)
-		}
-
-	case *pg_query.Node_BooleanTest:
-		if n.BooleanTest != nil {
-			walkNodeForSubqueries(n.BooleanTest.Arg, seen, refs, cteNames)
-		}
-
 	case *pg_query.Node_RowExpr:
 		if n.RowExpr != nil {
-			for _, arg := range n.RowExpr.Args {
-				walkNodeForSubqueries(arg, seen, refs, cteNames)
-			}
+			return n.RowExpr.Args
 		}
 	}
+	return nil
+}
+
+// scalarExprChildren handles expression nodes with a single child.
+func scalarExprChildren(node *pg_query.Node) []*pg_query.Node {
+	switch n := node.Node.(type) {
+	case *pg_query.Node_ResTarget:
+		if n.ResTarget != nil {
+			return []*pg_query.Node{n.ResTarget.Val}
+		}
+	case *pg_query.Node_TypeCast:
+		if n.TypeCast != nil {
+			return []*pg_query.Node{n.TypeCast.Arg}
+		}
+	case *pg_query.Node_NullTest:
+		if n.NullTest != nil {
+			return []*pg_query.Node{n.NullTest.Arg}
+		}
+	case *pg_query.Node_BooleanTest:
+		if n.BooleanTest != nil {
+			return []*pg_query.Node{n.BooleanTest.Arg}
+		}
+	}
+	return nil
 }
 
 // CheckTableFilter parses the SQL, extracts all table references, and validates
