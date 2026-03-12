@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.3](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.16.2...v1.16.3) (2026-03-12)
+
+
+### Bug Fixes
+
+* resolve Go Report Card issues to reach 100% ([#91](https://github.com/peter-trerotola/go-postgres-mcp/issues/91)) ([62470f7](https://github.com/peter-trerotola/go-postgres-mcp/commit/62470f7b4d753f77eef2746cd811a25d4e6b4001))
+
 ## [1.16.2](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.16.1...v1.16.2) (2026-03-09)
 
 
