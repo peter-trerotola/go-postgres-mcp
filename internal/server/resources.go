@@ -36,7 +36,7 @@ func (a *App) handleResourceTables(ctx context.Context, request mcp.ReadResource
 		return nil, fmt.Errorf("missing required parameter: database")
 	}
 
-	schemas, err := a.store.ListSchemas(dbName)
+	schemas, err := a.engine.Store.ListSchemas(dbName)
 	if err != nil {
 		return nil, fmt.Errorf("listing schemas: %w", err)
 	}
@@ -51,12 +51,12 @@ func (a *App) handleResourceTables(ctx context.Context, request mcp.ReadResource
 
 	entries := make([]tableEntry, 0)
 	for _, s := range schemas {
-		tables, err := a.store.ListTables(dbName, s.SchemaName)
+		tables, err := a.engine.Store.ListTables(dbName, s.SchemaName)
 		if err != nil {
 			return nil, fmt.Errorf("listing tables for schema %s: %w", s.SchemaName, err)
 		}
 		for _, t := range tables {
-			cols, _ := a.store.ListColumnsCompact(dbName, s.SchemaName, t.TableName)
+			cols, _ := a.engine.Store.ListColumnsCompact(dbName, s.SchemaName, t.TableName)
 			entries = append(entries, tableEntry{
 				Schema:      s.SchemaName,
 				Table:       t.TableName,
@@ -90,7 +90,7 @@ func (a *App) handleResourceTableDetail(ctx context.Context, request mcp.ReadRes
 		return nil, fmt.Errorf("missing required parameters: database, schema, table")
 	}
 
-	detail, err := a.store.DescribeTable(dbName, schema, table)
+	detail, err := a.engine.Store.DescribeTable(dbName, schema, table)
 	if err != nil {
 		return nil, fmt.Errorf("describing table: %w", err)
 	}

@@ -7,10 +7,7 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/guard"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/postgres"
+	"github.com/peter-trerotola/goro-pg/internal/postgres"
 )
 
 func (a *App) registerTools() {
@@ -155,123 +152,53 @@ func (a *App) handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return errResult, nil
 	}
 
-	// Enforce table filters before executing
-	if err := a.checkTableFilter(dbName, sqlStr); err != nil {
+	result, err := a.engine.Query(ctx, dbName, sqlStr)
+	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	result, err := postgres.ReadOnlyQuery(ctx, a.pools, dbName, sqlStr)
-	if err != nil {
-		return mcp.NewToolResultError(a.enrichError(err, dbName, sqlStr)), nil
-	}
-
-	// Populate schema context from knowledge map
-	result.SchemaContext = a.buildSchemaContext(dbName, sqlStr)
 
 	return marshalResult(result)
 }
 
-// buildSchemaContext extracts table refs from SQL and looks up columns from the knowledge map.
-// Note: SQL is parsed again here after guard.Validate in ReadOnlyQuery. The double parse
-// is intentional — ReadOnlyQuery validates internally as defense-in-depth, and pg_query
-// parsing is sub-millisecond. The Postgres round-trip dominates query latency.
-func (a *App) buildSchemaContext(dbName, sqlStr string) map[string][]knowledgemap.ColumnSummary {
-	tableRefs := guard.ExtractTableRefs(sqlStr)
-	if len(tableRefs) == 0 {
-		return nil
-	}
-
-	ctx := make(map[string][]knowledgemap.ColumnSummary, len(tableRefs))
-	for _, ref := range tableRefs {
-		cols, err := a.store.ListColumnsCompact(dbName, ref.Schema, ref.Table)
-		if err != nil || len(cols) == 0 {
-			continue
-		}
-		key := ref.Schema + "." + ref.Table
-		ctx[key] = cols
-	}
-
-	if len(ctx) == 0 {
-		return nil
-	}
-	return ctx
-}
-
-// enrichError appends schema hints to query errors involving unknown columns or tables.
-func (a *App) enrichError(err error, dbName, sqlStr string) string {
-	msg := err.Error()
-
-	if !strings.Contains(msg, "does not exist") {
-		return msg
-	}
-
-	tableRefs := guard.ExtractTableRefs(sqlStr)
-	if len(tableRefs) == 0 {
-		return msg
-	}
-
-	var hints []string
-	for _, ref := range tableRefs {
-		cols, lookupErr := a.store.ListColumnsCompact(dbName, ref.Schema, ref.Table)
-		if lookupErr != nil || len(cols) == 0 {
-			continue
-		}
-		parts := make([]string, len(cols))
-		for i, c := range cols {
-			parts[i] = c.Column + " (" + c.Type + ")"
-		}
-		hints = append(hints, fmt.Sprintf("  %s.%s: %s", ref.Schema, ref.Table, strings.Join(parts, ", ")))
-	}
-
-	if len(hints) == 0 {
-		return msg
-	}
-
-	return msg + "\n\nSchema for referenced tables:\n" + strings.Join(hints, "\n")
-}
-
 func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// If a specific database is provided, discover only that one.
-	// Otherwise, discover all configured databases.
-	var targets []config.DatabaseConfig
-	var dbName string
-
 	args := request.GetArguments()
 	if raw, ok := args["database"]; ok {
 		s, isStr := raw.(string)
 		if !isStr || s == "" {
 			return mcp.NewToolResultError("database must be a non-empty string"), nil
 		}
-		dbName = s
-		dbCfg, err := a.findDBConfig(dbName)
+		a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("discovering schema for %s...", s))
+		dr, err := a.engine.Discover(ctx, s)
 		if err != nil {
+			a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovery failed for %s: %v", s, err))
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		targets = []config.DatabaseConfig{*dbCfg}
-	} else {
-		targets = a.cfg.Databases
+		a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("ready — %d tables discovered", dr.TablesFound))
+		a.refreshInstructions()
+		return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for database %q", s)), nil
 	}
 
+	// Discover all databases
 	var failed []string
-	for _, dbCfg := range targets {
-		pool, err := a.pools.Get(dbCfg.Name)
+	for _, dbCfg := range a.engine.Cfg.Databases {
+		pool, err := a.engine.Pools.Get(dbCfg.Name)
 		if err != nil {
 			failed = append(failed, fmt.Sprintf("%s: %v", dbCfg.Name, err))
 			continue
 		}
 		a.sendLog(mcp.LoggingLevelInfo, fmt.Sprintf("discovering schema for %s...", dbCfg.Name))
-		if err := postgres.Discover(ctx, pool, dbCfg, a.store); err != nil {
+		if err := postgres.Discover(ctx, pool, dbCfg, a.engine.Store); err != nil {
 			a.sendLog(mcp.LoggingLevelWarning, fmt.Sprintf("schema discovery failed for %s: %v", dbCfg.Name, err))
 			failed = append(failed, fmt.Sprintf("%s: %v", dbCfg.Name, err))
 		}
 	}
 
-	tableCount, err := a.store.CountTables()
+	tableCount, err := a.engine.Store.CountTables()
 	if err != nil {
 		a.sendLog(mcp.LoggingLevelWarning, "schema discovery complete but failed to count tables")
 	} else {
-		dbs, dbErr := a.store.ListDatabases()
-		dbCount := len(a.cfg.Databases)
+		dbs, dbErr := a.engine.Store.ListDatabases()
+		dbCount := len(a.engine.Cfg.Databases)
 		if dbErr == nil {
 			dbCount = len(dbs)
 		}
@@ -286,37 +213,17 @@ func (a *App) handleDiscover(ctx context.Context, request mcp.CallToolRequest) (
 	if len(failed) > 0 {
 		return mcp.NewToolResultError(fmt.Sprintf("discovery failed for: %s", strings.Join(failed, "; "))), nil
 	}
-	if dbName != "" {
-		return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for database %q", dbName)), nil
-	}
-	return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for %d databases", len(targets))), nil
+	return mcp.NewToolResultText(fmt.Sprintf("Successfully discovered schema for %d databases", len(a.engine.Cfg.Databases))), nil
 }
 
 func (a *App) handleListDatabases(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	dbs, err := a.store.ListDatabases()
+	dbs, configDBs, err := a.engine.ListDatabases()
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	if len(dbs) == 0 {
-		type configDB struct {
-			Name     string `json:"name"`
-			Host     string `json:"host"`
-			Database string `json:"database"`
-			Status   string `json:"status"`
-		}
-		var list []configDB
-		for _, db := range a.cfg.Databases {
-			list = append(list, configDB{
-				Name:     db.Name,
-				Host:     db.Host,
-				Database: db.Database,
-				Status:   "not yet discovered",
-			})
-		}
-		return marshalResult(list)
+	if configDBs != nil {
+		return marshalResult(configDBs)
 	}
-
 	return marshalResult(dbs)
 }
 
@@ -325,7 +232,7 @@ func (a *App) handleListSchemas(ctx context.Context, request mcp.CallToolRequest
 	if errResult != nil {
 		return errResult, nil
 	}
-	schemas, err := a.store.ListSchemas(dbName)
+	schemas, err := a.engine.ListSchemas(dbName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -341,7 +248,7 @@ func (a *App) handleListTables(ctx context.Context, request mcp.CallToolRequest)
 	if errResult != nil {
 		return errResult, nil
 	}
-	tables, err := a.store.ListTables(dbName, schemaName)
+	tables, err := a.engine.ListTables(dbName, schemaName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -361,7 +268,7 @@ func (a *App) handleDescribeTable(ctx context.Context, request mcp.CallToolReque
 	if errResult != nil {
 		return errResult, nil
 	}
-	detail, err := a.store.DescribeTable(dbName, schemaName, tableName)
+	detail, err := a.engine.DescribeTable(dbName, schemaName, tableName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -377,7 +284,7 @@ func (a *App) handleListViews(ctx context.Context, request mcp.CallToolRequest) 
 	if errResult != nil {
 		return errResult, nil
 	}
-	views, err := a.store.ListViews(dbName, schemaName)
+	views, err := a.engine.ListViews(dbName, schemaName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -393,7 +300,7 @@ func (a *App) handleListFunctions(ctx context.Context, request mcp.CallToolReque
 	if errResult != nil {
 		return errResult, nil
 	}
-	functions, err := a.store.ListFunctions(dbName, schemaName)
+	functions, err := a.engine.ListFunctions(dbName, schemaName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -405,7 +312,7 @@ func (a *App) handleSearchSchema(ctx context.Context, request mcp.CallToolReques
 	if errResult != nil {
 		return errResult, nil
 	}
-	results, err := a.store.SearchSchema(query)
+	results, err := a.engine.SearchSchema(query)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -413,31 +320,4 @@ func (a *App) handleSearchSchema(ctx context.Context, request mcp.CallToolReques
 		return mcp.NewToolResultText("No results found"), nil
 	}
 	return marshalResult(results)
-}
-
-// checkTableFilter enforces schema/table filters on the SQL before execution.
-// If the database has filters configured, all table references in the SQL are
-// validated against ShouldIncludeSchema and ShouldIncludeTable.
-func (a *App) checkTableFilter(dbName, sql string) error {
-	if a.cfg == nil {
-		return nil
-	}
-	dbCfg, err := a.findDBConfig(dbName)
-	if err != nil {
-		return nil // no config = no filters to enforce
-	}
-
-	return guard.CheckTableFilter(sql, func(schema, table string) bool {
-		return dbCfg.ShouldIncludeSchema(schema) && dbCfg.ShouldIncludeTable(schema, table)
-	})
-}
-
-// findDBConfig returns the config for a named database.
-func (a *App) findDBConfig(name string) (*config.DatabaseConfig, error) {
-	for i := range a.cfg.Databases {
-		if a.cfg.Databases[i].Name == name {
-			return &a.cfg.Databases[i], nil
-		}
-	}
-	return nil, fmt.Errorf("database %q not found in configuration", name)
 }

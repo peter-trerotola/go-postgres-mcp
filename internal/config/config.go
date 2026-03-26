@@ -214,13 +214,13 @@ func (d *DatabaseConfig) validate(index int, names map[string]bool) error {
 	return nil
 }
 
-// defaultKnowledgeMapPath returns <UserConfigDir>/go-postgres-mcp/knowledgemap.db,
+// defaultKnowledgeMapPath returns <UserConfigDir>/goro-pg/knowledgemap.db,
 // falling back to ./knowledgemap.db if the config directory cannot be resolved.
-// On Linux this is ~/.config/go-postgres-mcp/, on macOS ~/Library/Application Support/.
+// On Linux this is ~/.config/goro-pg/, on macOS ~/Library/Application Support/.
 func defaultKnowledgeMapPath() string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "./knowledgemap.db"
 	}
-	return filepath.Join(configDir, "go-postgres-mcp", "knowledgemap.db")
+	return filepath.Join(configDir, "goro-pg", "knowledgemap.db")
 }

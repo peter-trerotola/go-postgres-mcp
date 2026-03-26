@@ -1,12 +1,12 @@
 #!/bin/sh
-# Interactive setup script for go-postgres-mcp
-# Usage: curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/setup.sh | sh
+# Interactive setup script for goro-pg
+# Usage: curl -sfL https://peter-trerotola.github.io/goro-pg/setup.sh | sh
 #
 # Generates a config.yaml with prompted values.
 
 set -e
 
-CONFIG_FILE="${CONFIG_FILE:-${HOME}/.config/go-postgres-mcp/config.yaml}"
+CONFIG_FILE="${CONFIG_FILE:-${HOME}/.config/goro-pg/config.yaml}"
 
 # --- colors (tty-aware) ---
 
@@ -107,7 +107,7 @@ expand_tilde() {
 
 # --- start ---
 
-if [ -z "$GO_POSTGRES_MCP_NO_BANNER" ]; then
+if [ -z "$GORO_PG_NO_BANNER" ]; then
   printf '\n' >&2
   printf '%s' "$BLUE" >&2
   cat >&2 <<'BANNER'
@@ -130,7 +130,7 @@ BANNER
   printf '%s' "$RST" >&2
   printf '\n' >&2
 fi
-ohai "go-postgres-mcp setup"
+ohai "goro-pg setup"
 printf '\n' >&2
 
 CONFIG_DISPLAY=$(echo "$CONFIG_FILE" | sed "s|^${HOME}/|~/|")
@@ -416,7 +416,7 @@ CURRENT_PASSWORD=$(eval "echo \"\${$DB_PASSWORD_ENV}\"" 2>/dev/null || true)
 if [ -z "$CURRENT_PASSWORD" ]; then
   info "  ${BOLD}export ${DB_PASSWORD_ENV}='your-password'${RST}"
 fi
-info "  ${BOLD}go-postgres-mcp --config ${CONFIG_FILE}${RST}"
+info "  ${BOLD}goro-pg serve --config ${CONFIG_FILE}${RST}"
 printf '\n' >&2
 
 # --- claude code integration ---
@@ -429,10 +429,10 @@ if command -v claude >/dev/null 2>&1; then
     ok "server name: ${BOLD}${MCP_NAME}${RST}"
 
     # Detect binary path
-    if command -v go-postgres-mcp >/dev/null 2>&1; then
-      MCP_BIN=$(command -v go-postgres-mcp)
+    if command -v goro-pg >/dev/null 2>&1; then
+      MCP_BIN=$(command -v goro-pg)
     else
-      MCP_BIN="go-postgres-mcp"
+      MCP_BIN="goro-pg"
     fi
 
     # Resolve password for -e flag (GUI apps don't inherit shell env vars)
@@ -445,17 +445,17 @@ if command -v claude >/dev/null 2>&1; then
       info "running: ${DIM}claude mcp add ${MCP_NAME} -t stdio -e ${DB_PASSWORD_ENV}=*** ...${RST}"
       if claude mcp add "$MCP_NAME" -t stdio \
         -e "${DB_PASSWORD_ENV}=${MCP_PASSWORD}" \
-        -- "$MCP_BIN" --config "$CONFIG_FILE"; then
+        -- "$MCP_BIN" serve --config "$CONFIG_FILE"; then
         ok "added ${BOLD}${MCP_NAME}${RST} to Claude Code"
       else
         warn "could not add MCP server automatically"
         info "add it manually:"
-        info "  ${BOLD}claude mcp add ${MCP_NAME} -t stdio -e ${DB_PASSWORD_ENV}=YOUR_PASSWORD -- ${MCP_BIN} --config ${CONFIG_FILE}${RST}"
+        info "  ${BOLD}claude mcp add ${MCP_NAME} -t stdio -e ${DB_PASSWORD_ENV}=YOUR_PASSWORD -- ${MCP_BIN} serve --config ${CONFIG_FILE}${RST}"
       fi
       MCP_PASSWORD=""
     else
       warn "${DB_PASSWORD_ENV} is not set — you'll need to add it manually"
-      info "  ${BOLD}claude mcp add ${MCP_NAME} -t stdio -e ${DB_PASSWORD_ENV}=YOUR_PASSWORD -- ${MCP_BIN} --config ${CONFIG_FILE}${RST}"
+      info "  ${BOLD}claude mcp add ${MCP_NAME} -t stdio -e ${DB_PASSWORD_ENV}=YOUR_PASSWORD -- ${MCP_BIN} serve --config ${CONFIG_FILE}${RST}"
     fi
     printf '\n' >&2
   fi

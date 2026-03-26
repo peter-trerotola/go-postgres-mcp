@@ -1,11 +1,11 @@
 version: 2
 
-project_name: go-postgres-mcp
+project_name: goro-pg
 
 builds:
   - id: linux-amd64
     main: ./cmd/main.go
-    binary: go-postgres-mcp
+    binary: goro-pg
     goos:
       - linux
     goarch:
@@ -16,11 +16,11 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w
+      - -s -w -X github.com/peter-trerotola/goro-pg/internal/cli.version={{.Version}}
 
   - id: linux-arm64
     main: ./cmd/main.go
-    binary: go-postgres-mcp
+    binary: goro-pg
     goos:
       - linux
     goarch:
@@ -31,7 +31,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w
+      - -s -w -X github.com/peter-trerotola/goro-pg/internal/cli.version={{.Version}}
 
   # macOS targets require a macOS host (not cross-compiled). In CI, these are
   # built with --id darwin-amd64 --id darwin-arm64 on a macos-14 runner.
@@ -40,7 +40,7 @@ builds:
   # ships the macOS 15.2 SDK, avoiding this issue.
   - id: darwin-amd64
     main: ./cmd/main.go
-    binary: go-postgres-mcp
+    binary: goro-pg
     goos:
       - darwin
     goarch:
@@ -50,11 +50,11 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w
+      - -s -w -X github.com/peter-trerotola/goro-pg/internal/cli.version={{.Version}}
 
   - id: darwin-arm64
     main: ./cmd/main.go
-    binary: go-postgres-mcp
+    binary: goro-pg
     goos:
       - darwin
     goarch:
@@ -64,7 +64,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w
+      - -s -w -X github.com/peter-trerotola/goro-pg/internal/cli.version={{.Version}}
 
 archives:
   - format: tar.gz
@@ -84,4 +84,4 @@ changelog:
 release:
   github:
     owner: peter-trerotola
-    name: go-postgres-mcp
+    name: goro-pg

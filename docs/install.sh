@@ -1,6 +1,6 @@
 #!/bin/sh
-# Install script for go-postgres-mcp
-# Usage: curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/install.sh | sh
+# Install script for goro-pg
+# Usage: curl -sfL https://peter-trerotola.github.io/goro-pg/install.sh | sh
 #
 # Environment variables:
 #   VERSION      - specific version to install (default: latest)
@@ -8,9 +8,9 @@
 
 set -e
 
-REPO="peter-trerotola/go-postgres-mcp"
-BINARY="go-postgres-mcp"
-SETUP_URL="https://peter-trerotola.github.io/go-postgres-mcp/setup.sh"
+REPO="peter-trerotola/goro-pg"
+BINARY="goro-pg"
+SETUP_URL="https://peter-trerotola.github.io/goro-pg/setup.sh"
 
 # --- colors (tty-aware) ---
 
@@ -151,7 +151,7 @@ if ask_yn "run the configuration wizard now?"; then
   printf '\n' >&2
   SETUP_SCRIPT="${TMP_DIR}/setup.sh"
   curl -sfL "$SETUP_URL" -o "$SETUP_SCRIPT" || fail "could not download setup script"
-  GO_POSTGRES_MCP_NO_BANNER=1 sh "$SETUP_SCRIPT"
+  GORO_PG_NO_BANNER=1 sh "$SETUP_SCRIPT"
 else
   ohai "Next steps"
   info "  ${BOLD}${BINARY} --help${RST}"

@@ -6,7 +6,7 @@
 *.dylib
 *.test
 *.out
-go-postgres-mcp
+goro-pg
 
 # Go workspace
 go.work

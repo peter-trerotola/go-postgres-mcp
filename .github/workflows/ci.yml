@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Build Docker image
-        run: docker build -t go-postgres-mcp .
+        run: docker build -t goro-pg .
 
   # Uses macos-14 (Xcode 16.2, macOS 15.2 SDK) because pg_query_go's
   # bundled C code conflicts with macOS 15.4+ SDK headers.

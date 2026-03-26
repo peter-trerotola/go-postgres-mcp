@@ -85,10 +85,10 @@ jobs:
           VERSION="${{ needs.release-please.outputs.version }}"
           mkdir -p archives
           cd dist/linux-amd64_*/
-          tar czf "../../archives/go-postgres-mcp_${VERSION}_linux_amd64.tar.gz" go-postgres-mcp
+          tar czf "../../archives/goro-pg_${VERSION}_linux_amd64.tar.gz" goro-pg
           cd ../..
           cd dist/linux-arm64_*/
-          tar czf "../../archives/go-postgres-mcp_${VERSION}_linux_arm64.tar.gz" go-postgres-mcp
+          tar czf "../../archives/goro-pg_${VERSION}_linux_arm64.tar.gz" goro-pg
 
       - name: Upload Linux archives
         uses: actions/upload-artifact@v7
@@ -122,10 +122,10 @@ jobs:
           VERSION="${{ needs.release-please.outputs.version }}"
           mkdir -p archives
           cd dist/darwin-amd64_*/
-          tar czf "../../archives/go-postgres-mcp_${VERSION}_darwin_amd64.tar.gz" go-postgres-mcp
+          tar czf "../../archives/goro-pg_${VERSION}_darwin_amd64.tar.gz" goro-pg
           cd ../..
           cd dist/darwin-arm64_*/
-          tar czf "../../archives/go-postgres-mcp_${VERSION}_darwin_arm64.tar.gz" go-postgres-mcp
+          tar czf "../../archives/goro-pg_${VERSION}_darwin_arm64.tar.gz" goro-pg
 
       - name: Upload macOS archives
         uses: actions/upload-artifact@v7

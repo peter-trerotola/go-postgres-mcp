@@ -15,15 +15,16 @@ services:
       timeout: 5s
       retries: 5
 
-  mcp-server:
+  goro-pg:
     build: .
+    command: ["serve"]
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       TEST_DB_PASSWORD: ${POSTGRES_PASSWORD:-testpass}
     volumes:
-      - ./config.example.yaml:/etc/go-postgres-mcp/config.yaml:ro
+      - ./config.example.yaml:/etc/goro-pg/config.yaml:ro
       - kmdata:/data
     stdin_open: true
 

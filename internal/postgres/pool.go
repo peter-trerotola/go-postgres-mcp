@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
+	"github.com/peter-trerotola/goro-pg/internal/config"
 )
 
 // PoolManager manages connection pools for multiple databases.

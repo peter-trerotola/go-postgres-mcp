@@ -23,7 +23,7 @@ databases:
     #     - "public.sessions"
 
 knowledgemap:
-  # Defaults to <UserConfigDir>/go-postgres-mcp/knowledgemap.db (e.g. ~/.config/ on Linux).
+  # Defaults to <UserConfigDir>/goro-pg/knowledgemap.db (e.g. ~/.config/ on Linux).
   # Use an absolute path to override; ~ is not expanded.
   # path: "/data/knowledgemap.db"
   auto_discover_on_startup: true

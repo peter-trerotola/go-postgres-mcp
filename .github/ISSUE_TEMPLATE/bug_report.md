@@ -24,7 +24,7 @@ A clear description of the bug.
 
 ## Environment
 
-- **go-postgres-mcp version:**
+- **goro-pg version:**
 - **Go version:**
 - **PostgreSQL version:**
 - **OS:**

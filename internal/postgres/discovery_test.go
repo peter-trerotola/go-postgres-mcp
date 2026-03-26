@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
+	"github.com/peter-trerotola/goro-pg/internal/config"
+	"github.com/peter-trerotola/goro-pg/internal/knowledgemap"
 )
 
 // Integration tests require a running PostgreSQL instance.
