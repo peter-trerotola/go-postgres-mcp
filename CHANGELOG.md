@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.0](https://github.com/peter-trerotola/goro-pg/compare/v1.16.4...v1.17.0) (2026-03-28)
+
+
+### Features
+
+* add CLI mode, rename to goro-pg ([#98](https://github.com/peter-trerotola/goro-pg/issues/98)) ([76a62b0](https://github.com/peter-trerotola/goro-pg/commit/76a62b008c666a51365f0fabe42d7fad79853c63))
+
 ## [1.16.4](https://github.com/peter-trerotola/go-postgres-mcp/compare/v1.16.3...v1.16.4) (2026-03-12)
 
 
