@@ -103,7 +103,7 @@ databases:
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := filepath.Join(configDir, "go-postgres-mcp", "knowledgemap.db")
+	want := filepath.Join(configDir, "goro-pg", "knowledgemap.db")
 	if cfg.KnowledgeMap.Path != want {
 		t.Errorf("expected default km path %q, got %q", want, cfg.KnowledgeMap.Path)
 	}

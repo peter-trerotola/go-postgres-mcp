@@ -2,9 +2,9 @@
 
 ## Reporting Vulnerabilities
 
-If you discover a security vulnerability in go-postgres-mcp, please report it responsibly:
+If you discover a security vulnerability in goro-pg, please report it responsibly:
 
-**GitHub Security Advisory** (preferred): [Create a private security advisory](https://github.com/peter-trerotola/go-postgres-mcp/security/advisories/new)
+**GitHub Security Advisory** (preferred): [Create a private security advisory](https://github.com/peter-trerotola/goro-pg/security/advisories/new)
 
 **Do not open a public issue for security vulnerabilities.**
 

@@ -8,9 +8,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/postgres"
+	"github.com/peter-trerotola/goro-pg/internal/config"
+	"github.com/peter-trerotola/goro-pg/internal/engine"
+	"github.com/peter-trerotola/goro-pg/internal/knowledgemap"
+	"github.com/peter-trerotola/goro-pg/internal/postgres"
 )
 
 func TestNew_LoggingCapabilityInInitialize(t *testing.T) {
@@ -64,7 +65,10 @@ func TestSendLog_DoesNotPanic(t *testing.T) {
 		mcpserver.WithLogging(),
 	)
 
-	app := &App{store: store, mcpServer: mcpSrv}
+	app := &App{
+		engine:    &engine.Engine{Store: store},
+		mcpServer: mcpSrv,
+	}
 
 	// sendLog should not panic even with no connected clients
 	app.sendLog(mcp.LoggingLevelInfo, "test message")
@@ -84,12 +88,14 @@ func TestOnAfterInitialize_SkipsWhenAutoDiscoverDisabled(t *testing.T) {
 	)
 
 	app := &App{
-		cfg: &config.Config{
-			KnowledgeMap: config.KnowledgeMapConfig{
-				AutoDiscoverOnStartup: false,
+		engine: &engine.Engine{
+			Cfg: &config.Config{
+				KnowledgeMap: config.KnowledgeMapConfig{
+					AutoDiscoverOnStartup: false,
+				},
 			},
+			Store: store,
 		},
-		store:     store,
 		mcpServer: mcpSrv,
 	}
 
@@ -113,14 +119,16 @@ func TestOnAfterInitialize_OnlyRunsOnce(t *testing.T) {
 	defer cancel()
 
 	app := &App{
-		cfg: &config.Config{
-			KnowledgeMap: config.KnowledgeMapConfig{
-				AutoDiscoverOnStartup: true,
+		engine: &engine.Engine{
+			Cfg: &config.Config{
+				KnowledgeMap: config.KnowledgeMapConfig{
+					AutoDiscoverOnStartup: true,
+				},
 			},
+			Store: store,
+			Pools: postgres.NewPoolManager(), // empty — runAutoDiscovery will skip all DBs
 		},
-		store:          store,
 		mcpServer:      mcpSrv,
-		pools:          postgres.NewPoolManager(), // empty — runAutoDiscovery will skip all DBs
 		shutdownCtx:    ctx,
 		shutdownCancel: cancel,
 	}

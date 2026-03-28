@@ -6,8 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
+	"github.com/peter-trerotola/goro-pg/internal/config"
+	"github.com/peter-trerotola/goro-pg/internal/knowledgemap"
 )
 
 // Discover crawls a PostgreSQL database schema and populates the knowledge map.

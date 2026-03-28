@@ -11,9 +11,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/config"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/postgres"
+	"github.com/peter-trerotola/goro-pg/internal/config"
+	"github.com/peter-trerotola/goro-pg/internal/engine"
+	"github.com/peter-trerotola/goro-pg/internal/knowledgemap"
+	"github.com/peter-trerotola/goro-pg/internal/postgres"
 )
 
 func TestRequireStringArg_Present(t *testing.T) {
@@ -198,12 +199,15 @@ func newTestApp(t *testing.T) *App {
 		mcpserver.WithResourceCapabilities(false, true),
 	)
 
-	return &App{store: store, mcpServer: mcpSrv}
+	return &App{
+		engine:    &engine.Engine{Store: store},
+		mcpServer: mcpSrv,
+	}
 }
 
 func TestBuildSchemaContext_KnownTable(t *testing.T) {
 	app := newTestApp(t)
-	ctx := app.buildSchemaContext("testdb", "SELECT * FROM users")
+	ctx := app.engine.BuildSchemaContext("testdb", "SELECT * FROM users")
 	if ctx == nil {
 		t.Fatal("expected non-nil schema context")
 	}
@@ -224,7 +228,7 @@ func TestBuildSchemaContext_KnownTable(t *testing.T) {
 
 func TestBuildSchemaContext_UnknownTable(t *testing.T) {
 	app := newTestApp(t)
-	ctx := app.buildSchemaContext("testdb", "SELECT * FROM nonexistent")
+	ctx := app.engine.BuildSchemaContext("testdb", "SELECT * FROM nonexistent")
 	if ctx != nil {
 		t.Errorf("expected nil schema context for unknown table, got %v", ctx)
 	}
@@ -232,7 +236,7 @@ func TestBuildSchemaContext_UnknownTable(t *testing.T) {
 
 func TestBuildSchemaContext_NoFrom(t *testing.T) {
 	app := newTestApp(t)
-	ctx := app.buildSchemaContext("testdb", "SELECT 1+1")
+	ctx := app.engine.BuildSchemaContext("testdb", "SELECT 1+1")
 	if ctx != nil {
 		t.Errorf("expected nil schema context for no-FROM query, got %v", ctx)
 	}
@@ -240,7 +244,7 @@ func TestBuildSchemaContext_NoFrom(t *testing.T) {
 
 func TestBuildSchemaContext_MixedKnownUnknown(t *testing.T) {
 	app := newTestApp(t)
-	ctx := app.buildSchemaContext("testdb", "SELECT * FROM users JOIN unknown_table ON users.id = unknown_table.uid")
+	ctx := app.engine.BuildSchemaContext("testdb", "SELECT * FROM users JOIN unknown_table ON users.id = unknown_table.uid")
 	if ctx == nil {
 		t.Fatal("expected non-nil schema context")
 	}
@@ -255,7 +259,7 @@ func TestBuildSchemaContext_MixedKnownUnknown(t *testing.T) {
 func TestEnrichError_ColumnNotExist(t *testing.T) {
 	app := newTestApp(t)
 	err := fmt.Errorf(`executing query: ERROR: column "bad_col" does not exist (SQLSTATE 42703)`)
-	enriched := app.enrichError(err, "testdb", "SELECT bad_col FROM users")
+	enriched := app.engine.EnrichError(err, "testdb", "SELECT bad_col FROM users")
 
 	if !strings.Contains(enriched, "does not exist") {
 		t.Error("expected original error in enriched message")
@@ -274,7 +278,7 @@ func TestEnrichError_ColumnNotExist(t *testing.T) {
 func TestEnrichError_TableNotExist(t *testing.T) {
 	app := newTestApp(t)
 	err := fmt.Errorf(`executing query: ERROR: relation "bad_table" does not exist (SQLSTATE 42P01)`)
-	enriched := app.enrichError(err, "testdb", "SELECT * FROM bad_table")
+	enriched := app.engine.EnrichError(err, "testdb", "SELECT * FROM bad_table")
 
 	// Table doesn't exist in knowledge map either, so no hint appended
 	if strings.Contains(enriched, "Schema for referenced tables:") {
@@ -285,7 +289,7 @@ func TestEnrichError_TableNotExist(t *testing.T) {
 func TestEnrichError_NonSchemaError(t *testing.T) {
 	app := newTestApp(t)
 	err := errors.New("connection refused")
-	enriched := app.enrichError(err, "testdb", "SELECT * FROM users")
+	enriched := app.engine.EnrichError(err, "testdb", "SELECT * FROM users")
 
 	if enriched != "connection refused" {
 		t.Errorf("expected unchanged error message, got %q", enriched)
@@ -296,7 +300,7 @@ func TestEnrichError_SchemaHintForKnownTable(t *testing.T) {
 	app := newTestApp(t)
 	// Query references a known table but the column doesn't exist
 	err := fmt.Errorf(`executing query: ERROR: column "nonexistent_col" does not exist (SQLSTATE 42703)`)
-	enriched := app.enrichError(err, "testdb", "SELECT nonexistent_col FROM users")
+	enriched := app.engine.EnrichError(err, "testdb", "SELECT nonexistent_col FROM users")
 
 	if !strings.Contains(enriched, "id (integer)") {
 		t.Error("expected id column in hint")
@@ -338,7 +342,7 @@ func TestQueryResult_SchemaContextOmittedWhenNil(t *testing.T) {
 func newTestAppWithConfig(t *testing.T, databases []config.DatabaseConfig) *App {
 	t.Helper()
 	app := newTestApp(t)
-	app.cfg = &config.Config{Databases: databases}
+	app.engine.Cfg = &config.Config{Databases: databases}
 	return app
 }
 
@@ -348,12 +352,12 @@ func TestCheckTableFilter_SchemaFilterIntegration(t *testing.T) {
 	})
 
 	// Allowed: public schema
-	if err := app.checkTableFilter("testdb", "SELECT * FROM public.users"); err != nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM public.users"); err != nil {
 		t.Errorf("expected allowed, got: %v", err)
 	}
 
 	// Blocked: secret schema
-	if err := app.checkTableFilter("testdb", "SELECT * FROM secret.data"); err == nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM secret.data"); err == nil {
 		t.Error("expected blocked for secret schema")
 	}
 }
@@ -364,22 +368,22 @@ func TestCheckTableFilter_TableIncludeIntegration(t *testing.T) {
 	})
 
 	// Allowed: included table
-	if err := app.checkTableFilter("testdb", "SELECT * FROM users"); err != nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM users"); err != nil {
 		t.Errorf("expected allowed, got: %v", err)
 	}
 
 	// Allowed: join of included tables
-	if err := app.checkTableFilter("testdb", "SELECT * FROM users JOIN orders ON users.id = orders.user_id"); err != nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM users JOIN orders ON users.id = orders.user_id"); err != nil {
 		t.Errorf("expected allowed, got: %v", err)
 	}
 
 	// Blocked: not included
-	if err := app.checkTableFilter("testdb", "SELECT * FROM secrets"); err == nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM secrets"); err == nil {
 		t.Error("expected blocked for non-included table")
 	}
 
 	// Blocked: subquery not included
-	if err := app.checkTableFilter("testdb", "SELECT * FROM users WHERE id IN (SELECT user_id FROM secrets)"); err == nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM users WHERE id IN (SELECT user_id FROM secrets)"); err == nil {
 		t.Error("expected blocked for subquery referencing non-included table")
 	}
 }
@@ -390,12 +394,12 @@ func TestCheckTableFilter_TableExcludeIntegration(t *testing.T) {
 	})
 
 	// Allowed: non-excluded
-	if err := app.checkTableFilter("testdb", "SELECT * FROM users"); err != nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM users"); err != nil {
 		t.Errorf("expected allowed, got: %v", err)
 	}
 
 	// Blocked: excluded
-	if err := app.checkTableFilter("testdb", "SELECT * FROM secrets"); err == nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM secrets"); err == nil {
 		t.Error("expected blocked for excluded table")
 	}
 }
@@ -405,7 +409,7 @@ func TestCheckTableFilter_NoConfigAllowsAll(t *testing.T) {
 		{Name: "testdb"}, // no filters
 	})
 
-	if err := app.checkTableFilter("testdb", "SELECT * FROM anything"); err != nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM anything"); err != nil {
 		t.Errorf("expected allowed with no filters, got: %v", err)
 	}
 }
@@ -416,14 +420,14 @@ func TestCheckTableFilter_UnknownDBAllowsAll(t *testing.T) {
 	})
 
 	// Unknown database should not enforce filters
-	if err := app.checkTableFilter("testdb", "SELECT * FROM secret.data"); err != nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM secret.data"); err != nil {
 		t.Errorf("expected allowed for unknown database, got: %v", err)
 	}
 }
 
 func TestCheckTableFilter_NilConfigAllowsAll(t *testing.T) {
 	app := newTestApp(t) // no cfg set
-	if err := app.checkTableFilter("testdb", "SELECT * FROM anything"); err != nil {
+	if err := app.engine.CheckTableFilter("testdb", "SELECT * FROM anything"); err != nil {
 		t.Errorf("expected allowed with nil config, got: %v", err)
 	}
 }
@@ -432,7 +436,7 @@ func TestCheckTableFilter_NilConfigAllowsAll(t *testing.T) {
 
 func TestBuildSchemaSummary_WithData(t *testing.T) {
 	app := newTestApp(t)
-	summary := app.buildSchemaSummary()
+	summary := app.engine.BuildSchemaSummary()
 
 	if summary == "" {
 		t.Fatal("expected non-empty schema summary")
@@ -459,10 +463,10 @@ func TestBuildSchemaSummary_EmptyStore(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	app := &App{
-		store:     store,
+		engine:    &engine.Engine{Store: store},
 		mcpServer: mcpserver.NewMCPServer("test", "0.0.0"),
 	}
-	summary := app.buildSchemaSummary()
+	summary := app.engine.BuildSchemaSummary()
 	if summary != "" {
 		t.Errorf("expected empty summary for empty store, got %q", summary)
 	}
@@ -472,25 +476,25 @@ func TestBuildSchemaSummary_MultipleTables(t *testing.T) {
 	app := newTestApp(t)
 
 	// Add a second table
-	if err := app.store.InsertTable("testdb", knowledgemap.TableInfo{
+	if err := app.engine.Store.InsertTable("testdb", knowledgemap.TableInfo{
 		SchemaName: "public", TableName: "orders", TableType: "BASE TABLE",
 	}); err != nil {
 		t.Fatalf("seed table: %v", err)
 	}
-	if err := app.store.InsertColumn("testdb", knowledgemap.ColumnInfo{
+	if err := app.engine.Store.InsertColumn("testdb", knowledgemap.ColumnInfo{
 		SchemaName: "public", TableName: "orders", ColumnName: "order_id",
 		Ordinal: 1, DataType: "uuid",
 	}); err != nil {
 		t.Fatalf("seed column: %v", err)
 	}
-	if err := app.store.InsertColumn("testdb", knowledgemap.ColumnInfo{
+	if err := app.engine.Store.InsertColumn("testdb", knowledgemap.ColumnInfo{
 		SchemaName: "public", TableName: "orders", ColumnName: "total",
 		Ordinal: 2, DataType: "numeric",
 	}); err != nil {
 		t.Fatalf("seed column: %v", err)
 	}
 
-	summary := app.buildSchemaSummary()
+	summary := app.engine.BuildSchemaSummary()
 	if !strings.Contains(summary, "[testdb] public.users:") {
 		t.Error("expected users table in summary")
 	}
@@ -509,25 +513,25 @@ func TestBuildSchemaSummary_MultipleDBs(t *testing.T) {
 	app := newTestApp(t)
 
 	// Add a second database
-	if err := app.store.InsertDatabase("analytics", "localhost", 5433, "analytics_db"); err != nil {
+	if err := app.engine.Store.InsertDatabase("analytics", "localhost", 5433, "analytics_db"); err != nil {
 		t.Fatalf("seed database: %v", err)
 	}
-	if err := app.store.InsertSchema("analytics", "reporting"); err != nil {
+	if err := app.engine.Store.InsertSchema("analytics", "reporting"); err != nil {
 		t.Fatalf("seed schema: %v", err)
 	}
-	if err := app.store.InsertTable("analytics", knowledgemap.TableInfo{
+	if err := app.engine.Store.InsertTable("analytics", knowledgemap.TableInfo{
 		SchemaName: "reporting", TableName: "events", TableType: "BASE TABLE",
 	}); err != nil {
 		t.Fatalf("seed table: %v", err)
 	}
-	if err := app.store.InsertColumn("analytics", knowledgemap.ColumnInfo{
+	if err := app.engine.Store.InsertColumn("analytics", knowledgemap.ColumnInfo{
 		SchemaName: "reporting", TableName: "events", ColumnName: "event_type",
 		Ordinal: 1, DataType: "text",
 	}); err != nil {
 		t.Fatalf("seed column: %v", err)
 	}
 
-	summary := app.buildSchemaSummary()
+	summary := app.engine.BuildSchemaSummary()
 	if !strings.Contains(summary, "[analytics] reporting.events:") {
 		t.Error("expected analytics database in summary")
 	}
@@ -576,7 +580,7 @@ func TestHandleDiscover_AllDatabases(t *testing.T) {
 	app := newTestAppWithConfig(t, []config.DatabaseConfig{
 		{Name: "db1"}, {Name: "db2"},
 	})
-	app.pools = postgres.NewPoolManager() // no pools connected
+	app.engine.Pools = postgres.NewPoolManager() // no pools connected
 	app.registerTools()
 
 	req := mcp.CallToolRequest{}
@@ -597,7 +601,7 @@ func TestHandleDiscover_InvalidDatabaseType(t *testing.T) {
 	app := newTestAppWithConfig(t, []config.DatabaseConfig{
 		{Name: "db1"},
 	})
-	app.pools = postgres.NewPoolManager()
+	app.engine.Pools = postgres.NewPoolManager()
 	app.registerTools()
 
 	req := mcp.CallToolRequest{}
@@ -617,7 +621,7 @@ func TestHandleDiscover_SpecificDatabase(t *testing.T) {
 	app := newTestAppWithConfig(t, []config.DatabaseConfig{
 		{Name: "db1"}, {Name: "db2"},
 	})
-	app.pools = postgres.NewPoolManager()
+	app.engine.Pools = postgres.NewPoolManager()
 	app.registerTools()
 
 	req := mcp.CallToolRequest{}
@@ -641,7 +645,7 @@ func TestHandleDiscover_UnknownDatabase(t *testing.T) {
 	app := newTestAppWithConfig(t, []config.DatabaseConfig{
 		{Name: "db1"},
 	})
-	app.pools = postgres.NewPoolManager()
+	app.engine.Pools = postgres.NewPoolManager()
 	app.registerTools()
 
 	req := mcp.CallToolRequest{}
@@ -665,7 +669,10 @@ func TestRefreshInstructions_EmptyStoreKeepsBaseOnly(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	mcpSrv := mcpserver.NewMCPServer("test", "0.0.0")
-	app := &App{store: store, mcpServer: mcpSrv}
+	app := &App{
+		engine:    &engine.Engine{Store: store},
+		mcpServer: mcpSrv,
+	}
 	app.refreshInstructions()
 
 	// Verify instructions are just the base (no schema appendix)

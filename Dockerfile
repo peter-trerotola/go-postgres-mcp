@@ -7,7 +7,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=1 go build -o /go-postgres-mcp ./cmd/main.go
+RUN CGO_ENABLED=1 go build -o /goro-pg ./cmd/main.go
 
 FROM debian:bookworm-slim
 
@@ -15,9 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
 RUN useradd -r -s /bin/false mcpuser
 
-COPY --from=builder /go-postgres-mcp /usr/local/bin/go-postgres-mcp
+COPY --from=builder /goro-pg /usr/local/bin/goro-pg
 
 USER mcpuser
 
-ENTRYPOINT ["go-postgres-mcp"]
-CMD ["-config", "/etc/go-postgres-mcp/config.yaml"]
+ENTRYPOINT ["goro-pg"]
+CMD ["serve", "--config", "/etc/goro-pg/config.yaml"]

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
+	"github.com/peter-trerotola/goro-pg/internal/knowledgemap"
 )
 
 func TestHandleResourceTables(t *testing.T) {
@@ -125,11 +125,11 @@ func TestHandleResourceTables_MultipleSchemas(t *testing.T) {
 	app := newTestApp(t)
 
 	// Add another schema with a table
-	app.store.InsertSchema("testdb", "audit")
-	app.store.InsertTable("testdb", knowledgemap.TableInfo{
+	app.engine.Store.InsertSchema("testdb", "audit")
+	app.engine.Store.InsertTable("testdb", knowledgemap.TableInfo{
 		SchemaName: "audit", TableName: "logs", TableType: "BASE TABLE",
 	})
-	app.store.InsertColumn("testdb", knowledgemap.ColumnInfo{
+	app.engine.Store.InsertColumn("testdb", knowledgemap.ColumnInfo{
 		SchemaName: "audit", TableName: "logs", ColumnName: "id",
 		Ordinal: 1, DataType: "bigint",
 	})

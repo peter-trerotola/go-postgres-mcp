@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>go-postgres-mcp</title>
-  <meta name="description" content="Read-only PostgreSQL MCP server with schema intelligence">
+  <title>goro-pg</title>
+  <meta name="description" content="Read-only PostgreSQL CLI tool and MCP server with schema intelligence">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -261,13 +261,13 @@
 <body>
   <div class="container">
     <header>
-      <h1 class="prompt">go-postgres-mcp</h1>
-      <p class="tagline">read-only postgresql mcp server with schema intelligence</p>
+      <h1 class="prompt">goro-pg</h1>
+      <p class="tagline">read-only postgresql cli tool &amp; mcp server with schema intelligence</p>
       <div class="badges">
-        <a href="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/ci.yml"><img src="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-        <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases"><img src="https://github.com/peter-trerotola/go-postgres-mcp/actions/workflows/release.yml/badge.svg" alt="Release"></a>
-        <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/peter-trerotola/go-postgres-mcp?color=3fb950" alt="Latest Release"></a>
-        <a href="https://goreportcard.com/report/github.com/peter-trerotola/go-postgres-mcp"><img src="https://goreportcard.com/badge/github.com/peter-trerotola/go-postgres-mcp" alt="Go Report Card"></a>
+        <a href="https://github.com/peter-trerotola/goro-pg/actions/workflows/ci.yml"><img src="https://github.com/peter-trerotola/goro-pg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+        <a href="https://github.com/peter-trerotola/goro-pg/releases"><img src="https://github.com/peter-trerotola/goro-pg/actions/workflows/release.yml/badge.svg" alt="Release"></a>
+        <a href="https://github.com/peter-trerotola/goro-pg/releases/latest"><img src="https://img.shields.io/github/v/release/peter-trerotola/goro-pg?color=3fb950" alt="Latest Release"></a>
+        <a href="https://goreportcard.com/report/github.com/peter-trerotola/goro-pg"><img src="https://goreportcard.com/badge/github.com/peter-trerotola/goro-pg" alt="Go Report Card"></a>
         <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
       </div>
       <pre style="color: var(--cyan); font-size: 11px; line-height: 1.3; margin-top: 20px; overflow-x: auto;">                           .-------------------------.
@@ -289,11 +289,11 @@
 
     <div class="section">
       <div class="section-label">install</div>
-      <div class="cmd" id="curl-cmd">curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/install.sh | sh<button class="copy-btn" aria-label="Copy curl install command" onclick="copy('curl-cmd')">cp</button></div>
+      <div class="cmd" id="curl-cmd">curl -sfL https://peter-trerotola.github.io/goro-pg/install.sh | sh<button class="copy-btn" aria-label="Copy curl install command" onclick="copy('curl-cmd')">cp</button></div>
       <p class="alt-label">or</p>
-      <div class="cmd" id="go-cmd">go install github.com/peter-trerotola/go-postgres-mcp/cmd@latest<button class="copy-btn" aria-label="Copy go install command" onclick="copy('go-cmd')">cp</button></div>
+      <div class="cmd" id="go-cmd">go install github.com/peter-trerotola/goro-pg/cmd@latest<button class="copy-btn" aria-label="Copy go install command" onclick="copy('go-cmd')">cp</button></div>
       <p class="alt-label">or</p>
-      <div class="cmd" id="docker-cmd">docker pull ghcr.io/peter-trerotola/go-postgres-mcp:latest<button class="copy-btn" aria-label="Copy docker pull command" onclick="copy('docker-cmd')">cp</button></div>
+      <div class="cmd" id="docker-cmd">docker pull ghcr.io/peter-trerotola/goro-pg:latest<button class="copy-btn" aria-label="Copy docker pull command" onclick="copy('docker-cmd')">cp</button></div>
       <p class="platform-note">linux/darwin &middot; amd64/arm64</p>
     </div>
 
@@ -306,7 +306,7 @@
       </div>
       <div class="config-block" id="tab-setup" role="tabpanel">
         <pre><code><span class="c"># interactive setup — discovers databases, generates config.yaml, adds to Claude Code</span></code></pre>
-        <div class="cmd" id="setup-cmd" style="margin-top: 8px">curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/setup.sh | sh<button class="copy-btn" aria-label="Copy setup command" onclick="copyText('curl -sfL https://peter-trerotola.github.io/go-postgres-mcp/setup.sh | sh', this)">cp</button></div>
+        <div class="cmd" id="setup-cmd" style="margin-top: 8px">curl -sfL https://peter-trerotola.github.io/goro-pg/setup.sh | sh<button class="copy-btn" aria-label="Copy setup command" onclick="copyText('curl -sfL https://peter-trerotola.github.io/goro-pg/setup.sh | sh', this)">cp</button></div>
       </div>
       <div class="config-block hidden" id="tab-minimal" role="tabpanel" data-yaml="# config.yaml — full discovery, all schemas and tables
 databases:
@@ -394,8 +394,8 @@ knowledgemap:
       <div class="section-label">features</div>
       <div class="features">
         <div class="feature">
-          <h3>9 mcp tools</h3>
-          <p>query, explore schemas, search tables, discover database structure</p>
+          <h3>cli-first</h3>
+          <p>query, explore schemas, search tables directly from your terminal</p>
         </div>
         <div class="feature">
           <h3>read-only</h3>
@@ -406,20 +406,20 @@ knowledgemap:
           <p>auto-discovery with sqlite fts5 knowledge map, schema context injection</p>
         </div>
         <div class="feature">
-          <h3>works everywhere</h3>
-          <p>claude desktop, claude code, cursor, any mcp client. stdio transport</p>
+          <h3>mcp + cli</h3>
+          <p>use as a cli tool or as an mcp server with claude desktop, claude code, cursor</p>
         </div>
       </div>
     </div>
 
     <div class="links">
-      <a href="https://github.com/peter-trerotola/go-postgres-mcp">github</a>
+      <a href="https://github.com/peter-trerotola/goro-pg">github</a>
       <span aria-hidden="true">|</span>
-      <a href="https://github.com/peter-trerotola/go-postgres-mcp/releases">releases</a>
+      <a href="https://github.com/peter-trerotola/goro-pg/releases">releases</a>
       <span aria-hidden="true">|</span>
-      <a href="https://github.com/peter-trerotola/go-postgres-mcp#configuration">docs</a>
+      <a href="https://github.com/peter-trerotola/goro-pg#configuration">docs</a>
       <span aria-hidden="true">|</span>
-      <a href="https://github.com/peter-trerotola/go-postgres-mcp/issues">issues</a>
+      <a href="https://github.com/peter-trerotola/goro-pg/issues">issues</a>
       <span aria-hidden="true">&nbsp;</span>
       <span class="cursor" aria-hidden="true"></span>
     </div>

@@ -229,6 +229,13 @@ func (s *Store) CountTables() (int, error) {
 	return count, err
 }
 
+// CountTablesForDB returns the number of tables for a specific database.
+func (s *Store) CountTablesForDB(dbName string) (int, error) {
+	var count int
+	err := s.db.Get(&count, "SELECT COUNT(*) FROM km_tables WHERE database_name = ?", dbName)
+	return count, err
+}
+
 func (s *Store) SearchSchema(query string) ([]SearchResult, error) {
 	sanitized := sanitizeFTSQuery(query)
 	if sanitized == "" {

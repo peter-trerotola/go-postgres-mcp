@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/guard"
-	"github.com/peter-trerotola/go-postgres-mcp/internal/knowledgemap"
+	"github.com/peter-trerotola/goro-pg/internal/guard"
+	"github.com/peter-trerotola/goro-pg/internal/knowledgemap"
 )
 
 const maxRows = 1000

@@ -1,4 +1,4 @@
-# Contributing to go-postgres-mcp
+# Contributing to goro-pg
 
 Thank you for your interest in contributing! This document covers how to set up, develop, and submit changes.
 
@@ -21,13 +21,13 @@ Thank you for your interest in contributing! This document covers how to set up,
 4. **Build the binary:**
 
    ```bash
-   CGO_ENABLED=1 go build -o go-postgres-mcp ./cmd/main.go
+   CGO_ENABLED=1 go build -o goro-pg ./cmd/main.go
    ```
 
    Or via Docker:
 
    ```bash
-   docker build -t go-postgres-mcp .
+   docker build -t goro-pg .
    ```
 
 ## Commit Messages
