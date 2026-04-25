@@ -3,7 +3,7 @@ module github.com/peter-trerotola/goro-pg
 go 1.25.0
 
 require (
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/mark3labs/mcp-go v0.45.0
 	github.com/pganalyze/pg_query_go/v5 v5.1.0
